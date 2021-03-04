@@ -22,6 +22,7 @@ class error():
         
         zeros = [torch.tensor([[0]], dtype = torch.float) for i in point[0]]
         difference = [old_control(x)-u for (x,u) in zip(point[0],point[1])]
+        difference = [old_control(x)-torch.matmul(point[1],x) for x in point[0]]
         kosten_two = self.costs.approx_costs(x_values = zeros,l_control_values = new_controls, r_control_values =difference)
         '''
         with torch.no_grad():
@@ -38,7 +39,11 @@ class error():
         kosten = self.costs.approx_costs(x_values = point[0],l_control_values=old_controls, r_control_values =  old_controls)
         
         zeros = [torch.tensor([[0]], dtype = torch.float) for i in point[0]]
-        difference = [self.old_control(x)-u for (x,u) in zip(point[0],point[1])]
+        #difference = [self.old_control(x)-u for (x,u) in zip(point[0],point[1])]
+        difference = [self.old_control(x)-torch.matmul(point[1], x) for x in point[0]]
+        
+        assert len(difference) == len(new_controls)
+
         kosten_two = self.costs.approx_costs(x_values = zeros,l_control_values = new_controls, r_control_values =difference)
         #print("x values: ", point[0])
         #print("old control: ", old_controls)

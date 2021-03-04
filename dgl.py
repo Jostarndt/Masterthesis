@@ -16,26 +16,26 @@ class Dataset():
         self.kosten = cost_functional()
 
     def create_triple(self, starting_point = None, control_value = None):
-        #control_value = [torch.tensor([[0]], dtype= torch.float) for i in range(self.support_points + 1)] if not control_value else  [torch.tensor([[control_value]], dtype= torch.float) for i in range(self.support_points + 1)]
         if control_value == None:
             print("no control value")
-            control_value = [torch.tensor([[0]], dtype= torch.float) for i in range(self.support_points + 1)] 
+            control_value = torch.tensor([[0]], dtype= torch.float)
         elif isinstance(control_value, int) or isinstance(control_value, float):
             print("creation of tensor controls")
-            control_value = [torch.tensor([[control_value]], dtype= torch.float) for i in range(self.support_points + 1)]
+            control_value = torch.tensor([[control_value]], dtype= torch.float)
         else:
             print("control value during triple: ",control_value)
+            raise ControlError('unknown control format during creation of triple')
 
         '''creation of starting point'''
         if starting_point == None:
             print("no starting point")
-            starting_point = None
         elif isinstance(starting_point, int) or isinstance(starting_point, float):
             print("starting point is int or float")
             starting_point = torch.tensor([[starting_point]], dtype = torch.float)
         else:
-            print(type(starting_point))
-            print("starting point: ", starting_point)
+            pass
+            #print("starting point is: ", type(starting_point))
+
         #print("+++++control_value: ", control_value)
         trajectory = self.pde.euler_step(stepsize = self.stepsize, total_steps = self.support_points, last_point = starting_point, control= control_value)
         #print("trajectory: ", trajectory)
@@ -45,11 +45,11 @@ class Dataset():
         #print("first step: ",trajectory[0], ", last_step: ",trajectory[-1], ", costs: ",price)
         return [trajectory, control_value]
 
-    def create_dataset(self, control = None, starting_point = None):
+    def create_dataset(self, control_value = None, starting_point = None):
         self.dataset = []
-        self.dataset.append(self.create_triple(starting_point = starting_point, control_value = control))
+        self.dataset.append(self.create_triple(starting_point = starting_point, control_value = control_value))
         for i in range(self.amount_x-1):
-            self.dataset.append(self.create_triple(starting_point= self.dataset[-1][0][-1], control_value = control))
+            self.dataset.append(self.create_triple(starting_point= self.dataset[-1][0][-1], control_value = control_value))
             '''if self.dataset[0][-1] > self.dataset[0][0]:
                 print("Growing state!")
                 break
@@ -68,12 +68,12 @@ class Dataset():
         return self.datasets
 
     def create_dataset_different_control_and_starts(self):
-        controls = [0, -2, -4, -6, -8, -10]
+        controls = [0, -2, -4, -6, -8, -10, -12, -16]
         starting_points = [0,1,0.3, 0.6]
         #assert len(controls) == self.amount_controls
         for i in itertools.product(controls, starting_points):
             print(i)
-            self.datasets.append(self.create_dataset(control = i[0], starting_point = i[1]))
+            self.datasets.append(self.create_dataset(control_value = i[0], starting_point = i[1]))
         return self.datasets
 
 
@@ -88,13 +88,15 @@ class dgl:
         return torch.matmul(self.A,x) +torch.matmul(self.B,u)
 
     def euler_step(self, stepsize = 0.1,total_steps = 1, last_point=None, control = None):
-        control = [torch.tensor([[0]], dtype=torch.float) for i in range(total_steps +1)] if not control else control
+        control = torch.tensor([[0]], dtype=torch.float) if not control else control
         print("control value", control)
         
+        assert len(control) ==1 #for testing purpose
+
         if not last_point: last_point = self.x_0
         output = [last_point]
         for i in range(total_steps):
-            last_point = last_point + stepsize * self.rhs(last_point, control[i])
+            last_point = last_point + stepsize * self.rhs(last_point, torch.matmul(control, last_point))
             output.append(last_point)
         #print("last point of trajectory: ",last_point)
         return output
@@ -112,8 +114,9 @@ class cost_functional:
         assert len(x_values) == len(l_control_values)
         assert len(l_control_values) == len(r_control_values)
 
+        #points = [torch.matmul(x, torch.matmul(self.Q,x))+ torch.matmul(l_u, torch.matmul(self.R,r_u)) for (x,l_u, r_u) in zip(x_values, l_control_values, r_control_values)]
+        
         points = [torch.matmul(x, torch.matmul(self.Q,x))+ torch.matmul(l_u, torch.matmul(self.R,r_u)) for (x,l_u, r_u) in zip(x_values, l_control_values, r_control_values)]
-
 
         #integral = np.trapz(points,dx = 0.1)
 
