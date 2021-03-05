@@ -43,7 +43,7 @@ class critic(nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        return F.relu(self.fc3(x))
+        return self.fc3(x)
     def jacobi_matrix(self):
         pass
     

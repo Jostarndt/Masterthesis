@@ -6,10 +6,10 @@ import itertools
 
 class Dataset():
     def __init__(self):
-        self.support_points = 10
-        self.amount_x = 10
-        self.stepsize = 0.01
-        #self.amount_controls = 11
+        self.support_points = 30 #amount of euler steps / steps in the integral
+        self.amount_x = 10 #amount of points of x on which V is getting trained. Note: trajectory has actual lengh of amount_x * support_points
+        self.stepsize = 0.01 #stepsize for the euler steps, stepsize = distance of x from above / support points => distance of 0.3 
+        #NOTE!! if you change this you have to change 'approx_costs' in train.py
         self.dataset = []
         self.datasets = []
         self.pde = dgl()
@@ -20,7 +20,6 @@ class Dataset():
             print("no control value")
             control_value = torch.tensor([[0]], dtype= torch.float)
         elif isinstance(control_value, int) or isinstance(control_value, float):
-            print("creation of tensor controls")
             control_value = torch.tensor([[control_value]], dtype= torch.float)
         else:
             print("control value during triple: ",control_value)
@@ -28,9 +27,8 @@ class Dataset():
 
         '''creation of starting point'''
         if starting_point == None:
-            print("no starting point")
+            pass
         elif isinstance(starting_point, int) or isinstance(starting_point, float):
-            print("starting point is int or float")
             starting_point = torch.tensor([[starting_point]], dtype = torch.float)
         else:
             pass
@@ -39,10 +37,6 @@ class Dataset():
         #print("+++++control_value: ", control_value)
         trajectory = self.pde.euler_step(stepsize = self.stepsize, total_steps = self.support_points, last_point = starting_point, control= control_value)
         #print("trajectory: ", trajectory)
-
-        #price = self.kosten.approx_costs(trajectory,control_value) 
-
-        #print("first step: ",trajectory[0], ", last_step: ",trajectory[-1], ", costs: ",price)
         return [trajectory, control_value]
 
     def create_dataset(self, control_value = None, starting_point = None):
@@ -57,7 +51,7 @@ class Dataset():
                 print("state runs negative")
                 break
             '''
-        print(self.dataset)
+        #print(self.dataset)
         return self.dataset
 
     def create_dataset_different_controls(self):
@@ -68,11 +62,10 @@ class Dataset():
         return self.datasets
 
     def create_dataset_different_control_and_starts(self):
-        controls = [0, -2, -4, -6, -8, -10, -12, -16]
-        starting_points = [0,1,0.3, 0.6]
+        controls = [-6, -8, -10, -12, -16]
+        starting_points = [1, 0.8, 0.6, 0.4, 0.2, 0]
         #assert len(controls) == self.amount_controls
         for i in itertools.product(controls, starting_points):
-            print(i)
             self.datasets.append(self.create_dataset(control_value = i[0], starting_point = i[1]))
         return self.datasets
 
@@ -89,7 +82,6 @@ class dgl:
 
     def euler_step(self, stepsize = 0.1,total_steps = 1, last_point=None, control = None):
         control = torch.tensor([[0]], dtype=torch.float) if not control else control
-        print("control value", control)
         
         assert len(control) ==1 #for testing purpose
 
@@ -98,7 +90,6 @@ class dgl:
         for i in range(total_steps):
             last_point = last_point + stepsize * self.rhs(last_point, torch.matmul(control, last_point))
             output.append(last_point)
-        #print("last point of trajectory: ",last_point)
         return output
     def linear_feedback(self):
         pass
@@ -109,7 +100,7 @@ class cost_functional:
         self.Q = torch.tensor([[1]],dtype=torch.float)
         self.R = torch.tensor([[0.5]], dtype = torch.float)
 
-    def approx_costs(self, x_values, l_control_values, r_control_values):
+    def approx_costs(self, x_values, l_control_values, r_control_values, x_size):
         '''returns the integral over xQx + uRU'''
         assert len(x_values) == len(l_control_values)
         assert len(l_control_values) == len(r_control_values)
@@ -126,7 +117,7 @@ class cost_functional:
         integral = 0
         for support_point in points:
             integral += support_point
-        integral = integral/len(points)
+        integral = x_size* integral/len(points)
         return integral
 
 
