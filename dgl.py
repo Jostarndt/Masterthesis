@@ -51,7 +51,7 @@ class Dataset():
                 print("state runs negative")
                 break
             '''
-        #print(self.dataset)
+        print(self.dataset)
         return self.dataset
 
     def create_dataset_different_controls(self):
@@ -62,7 +62,7 @@ class Dataset():
         return self.datasets
 
     def create_dataset_different_control_and_starts(self):
-        controls = [-6, -8, -10, -12, -16]
+        controls = [4,3,2,1,0,-1,-2,-3,-4]
         starting_points = [1, 0.8, 0.6, 0.4, 0.2, 0]
         #assert len(controls) == self.amount_controls
         for i in itertools.product(controls, starting_points):
@@ -73,7 +73,7 @@ class Dataset():
 
 class dgl:
     def __init__(self, x_0 = None):
-        self.A = torch.tensor([[1]], dtype= torch.float)
+        self.A = torch.tensor([[-1]], dtype= torch.float)
         self.B = torch.tensor([[0.2]], dtype= torch.float)
         self.x_0 = torch.tensor([[1]], dtype= torch.float) if not x_0 else x_0
 

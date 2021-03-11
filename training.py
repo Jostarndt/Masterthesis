@@ -85,7 +85,9 @@ if __name__ == '__main__':
 
     print("##################################")
 
-    old_control = model.actor()#TODO: make this admissible!
+    old_control = model.actor(stabilizing = True)#TODO: make this admissible!
+    for param in old_control.parameters():
+        print(param)
     new_control = model.actor()
     value_function = model.critic()
     costs = dgl.cost_functional()
