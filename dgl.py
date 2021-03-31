@@ -6,10 +6,10 @@ import itertools
 
 class Dataset():
     def __init__(self):
-        self.support_points = 30 #amount of euler steps / steps in the integral
-        self.amount_x = 10 #amount of points of x on which V is getting trained. Note: trajectory has actual lengh of amount_x * support_points
+        self.support_points = 10 #amount of euler steps / steps in the integral
+        self.amount_x = 2 #amount of points of x on which V is getting trained. Note: trajectory has actual lengh of amount_x * support_points
         self.stepsize = 0.01 #stepsize for the euler steps, stepsize = distance of x from above / support points => distance of 0.3 
-        #NOTE!! if you change this you have to change 'approx_costs' in train.py
+        #NOTE!! if you change this you have to change 'approx_costs' in train.py TWO TIMES!
         self.dataset = []
         self.datasets = []
         self.pde = dgl()
@@ -51,7 +51,7 @@ class Dataset():
                 print("state runs negative")
                 break
             '''
-        print(self.dataset)
+        #print(self.dataset)
         return self.dataset
 
     def create_dataset_different_controls(self):
@@ -62,8 +62,8 @@ class Dataset():
         return self.datasets
 
     def create_dataset_different_control_and_starts(self):
-        controls = [4,3,2,1,0,-1,-2,-3,-4]
-        starting_points = [1, 0.8, 0.6, 0.4, 0.2, 0]
+        controls = [-(1 +i/2) for i in range(7)]
+        starting_points = [torch.tensor([[np.random.rand(1)]], dtype = torch.float) for i in range(100)]#starting from 0 starts default -> staring from 1
         #assert len(controls) == self.amount_controls
         for i in itertools.product(controls, starting_points):
             self.datasets.append(self.create_dataset(control_value = i[0], starting_point = i[1]))
@@ -105,14 +105,9 @@ class cost_functional:
         assert len(x_values) == len(l_control_values)
         assert len(l_control_values) == len(r_control_values)
 
-        #points = [torch.matmul(x, torch.matmul(self.Q,x))+ torch.matmul(l_u, torch.matmul(self.R,r_u)) for (x,l_u, r_u) in zip(x_values, l_control_values, r_control_values)]
-        
         points = [torch.matmul(x, torch.matmul(self.Q,x))+ torch.matmul(l_u, torch.matmul(self.R,r_u)) for (x,l_u, r_u) in zip(x_values, l_control_values, r_control_values)]
 
-        #integral = np.trapz(points,dx = 0.1)
 
-        '''points = torch.Tensor(points)
-        integral = torch.trapz(points, dx = 0.1, dim = -1)#TODO sure about this?'''
 
         integral = 0
         for support_point in points:

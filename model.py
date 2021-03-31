@@ -41,17 +41,21 @@ class actor(nn.Module):
 
 
 class critic(nn.Module):
-    def __init__(self, space_dim=1):
+    def __init__(self, space_dim=1, positive = False):
         super(critic, self).__init__()
         self.s_dim = space_dim
-        self.fc1 = nn.Linear(space_dim, space_dim **2)
-        self.fc2 = nn.Linear(space_dim **2, space_dim)
+        self.fc1 = nn.Linear(space_dim, 40)#6
+        self.fc2 = nn.Linear(40, 1)
+        if positive:
+            pass
+            self.fc1.weight = torch.nn.parameter.Parameter(torch.abs(self.fc1.weight))
+            self.fc2.weight =  torch.nn.parameter.Parameter(torch.abs(self.fc2.weight))
+            self.fc1.bias =  torch.nn.parameter.Parameter(torch.abs(self.fc1.bias))
+            self.fc2.bias =  torch.nn.parameter.Parameter(torch.abs(self.fc2.bias))
     def forward(self, x):
-        x = self.fc1(x)
+        x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
-    def jacobi_matrix(self):
-        pass
     
 
 if __name__ == '__main__':
