@@ -5,6 +5,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import copy
+import dgl
+from torch.utils.data import Dataset, TensorDataset
+from torch.utils.data import DataLoader
 
 x =torch.eye(1)
 print(x)
@@ -29,56 +32,73 @@ class nn_model(nn.Module):
     
 Writer = SummaryWriter()
 test_function = nn_model()
-test_function_two = nn_model()
 
-x = [torch.tensor([[i/1000]]) for i in range(1000)]
-y = [approx_function(i) for i in x]
-y_two = [approx_function_two(i) for i in x]
+#x = [torch.tensor([[np.random.rand(1)]]) for i in range(10)]
+#y = [approx_function(i) for i in x]
 
-optimizer = optim.SGD(test_function.parameters(), lr= 0.01)
-optimizer_two = optim.SGD(test_function_two.parameters(), lr= 0.01)
+optimizer = optim.SGD(test_function.parameters(), lr=0.1)
+costs = dgl.cost_functional()
+loss_fn = nn.MSELoss(reduction = 'mean')
 
 for i in range(100):
     Writer.add_scalar('test/pretraining', test_function(torch.tensor([[i/100]], dtype = torch.float)), i)
 
-indices = np.arange(len(x))#x.shape[0])
+indices = np.arange(len(x))
 np.random.shuffle(indices)
 
-for epoch in range(20):
+'''
+for epoch in range(5):
     print("epoch")
-    for i in indices:
+    x = [torch.tensor([[np.random.rand(1)]], dtype= torch.float, requires_grad = True) for i in range(1000)]
+    x_square = [i**2 for i in x]
+    u = [torch.tensor([[test_function(i)]], dtype = torch.float) for i in x]
+    for i in range(len(x)):
         optimizer.zero_grad()
-        #optimizer_two.zero_grad()
-        loss =(y[i] - test_function(x[i]) ) **2
-        #loss_two = (y[i]-y_two[i]- (test_function_two(x[i]) - test_function_two(x[i]+1)))**2
+        loss = (x_square[i]-test_function(x[i]))**2
         loss.backward()
-        #loss_two.backward()
         optimizer.step()
-        #optimizer_two.step()
-        #Writer.add_scalar('loss_two'+str(epoch), loss_two, i)
-    #print(loss_two)
+        Writer.add_scalar('loss: ', loss, epoch)
 
-print(y[-1], x[-1], test_function(x[-1]), y_two[-1], test_function(x[-1]+1))
-print((y[-1]+y_two[-1]- (test_function(x[-1]) + test_function(x[-1]+1)))**2)
-
-test_function_two = copy.deepcopy(test_function)
-'''
-for epoch in range(20):
+for epoch in range(100):
     print("epoch")
-    for i in indices:
-        #optimizer.zero_grad()
-        optimizer_two.zero_grad()
-        #loss =(y[i] - test_function(x[i]) ) **2
-        loss_two = (y[i]-y_two[i]- (test_function_two(x[i]) - test_function_two(x[i]+1)))**2
-        #loss.backward()
-        loss_two.backward()
-        #optimizer.step()
-        optimizer_two.step()
-        Writer.add_scalar('loss_two'+str(epoch), loss_two, i)
-    print(loss_two)
+    x = [np.random.rand(1) for i in range(10000)]
+    x_square= [i**2 for i in x]
+    x = torch.tensor(x, dtype=torch.float)
+    x_square = torch.tensor(x_square, dtype=torch.float)
+    
+    test_function.train()
+
+    optimizer.zero_grad()
+    y_hat = test_function(x)
+    loss = loss_fn(y_hat,  x_square)
+    print(loss)
+    loss.backward()
+    optimizer.step()
 '''
+x = [np.random.rand(1) for i in range(10000)]
+x_square= [i**2 for i in x]
+x = torch.tensor(x, dtype=torch.float)
+x_square = torch.tensor(x_square, dtype=torch.float)
+
+train_data = TensorDataset(x, x_square)
+print(train_data[0])
+train_loader = DataLoader(dataset= train_data, batch_size = 32, shuffle = False)
+
+for epoch in range(10):
+    print("epoch")
+    for x_batch, y_batch in train_loader:
+        test_function.train()
+
+        y_hat = test_function(x_batch)
+
+        loss = loss_fn(y_batch, y_hat)
+
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        print(loss.item())
+
 
 for i in range(100):
     Writer.add_scalar('test/test_function', test_function(torch.tensor([[i/100]], dtype = torch.float)), i)
-    #Writer.add_scalar('test/test_function_two', test_function_two(torch.tensor([[i/100]], dtype = torch.float)), i)
  
