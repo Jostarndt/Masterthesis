@@ -91,36 +91,76 @@ class dgl:
             last_point = last_point + stepsize * self.rhs(last_point, torch.matmul(control, last_point))
             output.append(last_point)
         return output
-    def linear_feedback(self):
-        pass
 
 
 class cost_functional:
     def __init__(self):
         self.Q = torch.tensor([[1]],dtype=torch.float)
-        self.R = torch.tensor([[0.5]], dtype = torch.float)
-
+        self.R = torch.tensor([[-1]], dtype = torch.float)
+    '''
     def approx_costs(self, x_values, l_control_values, r_control_values, x_size):
-        '''returns the integral over xQx + uRU'''
-        assert len(x_values) == len(l_control_values)
-        assert len(l_control_values) == len(r_control_values)
-
+        '''
+        #returns the integral over xQx + uRU$
+    '''
         points = [torch.matmul(x, torch.matmul(self.Q,x))+ torch.matmul(l_u, torch.matmul(self.R,r_u)) for (x,l_u, r_u) in zip(x_values, l_control_values, r_control_values)]
-
-
-
         integral = 0
         for support_point in points:
             integral += support_point
         integral = x_size* integral/len(points)
         return integral
+        '''
+    def approx_costs(self, x_values, l_control_values, r_control_values, x_size):
+        '''
+        #returns the integral over xQx + uRU$
+        '''
+        points = torch.matmul(x_values, torch.matmul(self.Q,x_values))+ torch.matmul(l_control_values, torch.matmul(self.R,r_control_values))
+        integral = torch.mean(points)
+        return integral * x_size
+
+    def approx_costs_two(self, x_values, l_control_values, r_control_values, x_size):
+        points = torch.matmul(x_values, torch.matmul(self.Q,x_values))+ torch.matmul(l_control_values, torch.matmul(self.R,r_control_values))
+        train_data = TensorDataset(points)
+        train_loader = DataLoader(dataset = train_data, batch_size=32, shuffle = False)
+        #maybe: return train_loader???
+        for x_batch in train_loader:
+            test_function.train()
+            y_hat = new_control #.....
+            
+            loss = loss_fn(y_batch, y_hat)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
+    def approx_costs_three(self, x_values, l_control_values, r_control_values, x_size):
+        '''
+        #returns the integral over xQx + uRU$
+        '''
+        points = torch.matmul(x_values, torch.matmul(self.Q,x_values))+ torch.matmul(l_control_values, torch.matmul(self.R,r_control_values))
+        squares = torch.square(points)
+        integral = torch.mean(squares)
+        return integral * x_size
+
+
 
 
 if __name__ == '__main__':
-    dataset = Dataset()
-    #dataset.create_dataset()
-    output = dataset.create_dataset_different_controls()
-    print(output)
+    x = torch.tensor([[2]])
+    x = torch.unsqueeze(x, 1)
+    print(x)
+    for i in range(9):
+        x = torch.cat((x, torch.tensor([[[2]]])))
+    x = x.float()
+
+    u = torch.tensor([[0]])
+    u = torch.unsqueeze(u, 1)
+    for i in range(9):
+        u = torch.cat((u, torch.tensor([[[0]]])))
+    u = u.float()
+
+    kosten = cost_functional()
+    print(kosten.approx_costs(x, u, u, 1))
 
 
-
+    
+    ones = torch.ones(9,1,1)
+    print(ones)

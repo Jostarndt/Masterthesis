@@ -8,11 +8,13 @@ import copy
 import dgl
 from torch.utils.data import Dataset, TensorDataset
 from torch.utils.data import DataLoader
+import dgl
 
+'''
 x =torch.eye(1)
 print(x)
 x.requires_grad_(True)
-
+'''
 
 def approx_function(x):
     return x**2
@@ -35,16 +37,17 @@ test_function = nn_model()
 
 #x = [torch.tensor([[np.random.rand(1)]]) for i in range(10)]
 #y = [approx_function(i) for i in x]
+#indices = np.arange(len(x))
+#np.random.shuffle(indices)
 
 optimizer = optim.SGD(test_function.parameters(), lr=0.1)
 costs = dgl.cost_functional()
 loss_fn = nn.MSELoss(reduction = 'mean')
+#loss_fn = nn.L1Loss()
 
 for i in range(100):
     Writer.add_scalar('test/pretraining', test_function(torch.tensor([[i/100]], dtype = torch.float)), i)
 
-indices = np.arange(len(x))
-np.random.shuffle(indices)
 
 '''
 for epoch in range(5):
@@ -75,16 +78,18 @@ for epoch in range(100):
     loss.backward()
     optimizer.step()
 '''
+
+
 x = [np.random.rand(1) for i in range(10000)]
 x_square= [i**2 for i in x]
 x = torch.tensor(x, dtype=torch.float)
 x_square = torch.tensor(x_square, dtype=torch.float)
 
 train_data = TensorDataset(x, x_square)
-print(train_data[0])
 train_loader = DataLoader(dataset= train_data, batch_size = 32, shuffle = False)
 
-for epoch in range(10):
+for epoch in range(2):
+    break
     print("epoch")
     for x_batch, y_batch in train_loader:
         test_function.train()
@@ -96,7 +101,50 @@ for epoch in range(10):
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        print(loss.item())
+        #print(loss.item())
+
+
+
+for i in range(100):
+    Writer.add_scalar('test/inbetween', test_function(torch.tensor([[i/100]], dtype = torch.float)), i)
+
+
+
+kosten = dgl.cost_functional()
+for epoch in range(1000):
+    x = [np.random.rand(1) for i in range(32)] 
+    x = torch.tensor(x, dtype = torch.float)
+    x = torch.unsqueeze(x, 1)
+    x_square = torch.square(x)
+
+    ones = torch.ones(32,1,1)
+
+    test_function.train()
+    y_hat = test_function(x)
+    
+    #Q = torch.tensor([[1]],dtype=torch.float)
+    #R = torch.tensor([[-1]], dtype = torch.float)
+
+    #print("ist this: ", x_square)
+    #print('the same as: ',torch.matmul(x, torch.matmul(R,x))) yes!
+    
+    #print("ist this: ", y_hat)
+    #print('the same as: ',torch.matmul(ones, torch.matmul(Q,y_hat))) yes!
+
+    #points = torch.matmul(ones, torch.matmul(Q,y_hat))+ torch.matmul(x, torch.matmul(R,x))
+    #loss = (kosten.approx_costs_three(y_hat,x_square, ones, 1))**3
+    #loss = (kosten.approx_costs_three(y_hat,x_square, ones, 1))**2
+    loss = kosten.approx_costs_three(x, y_hat, ones, 1)
+    
+    #print("is ", points)
+    #print("the same as: ", y_hat - x_square) yes
+    #print(points)
+
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+    if epoch%300 == 0:
+        print(loss)
 
 
 for i in range(100):
