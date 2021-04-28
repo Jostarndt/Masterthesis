@@ -40,10 +40,10 @@ test_function = nn_model()
 #indices = np.arange(len(x))
 #np.random.shuffle(indices)
 
-optimizer = optim.SGD(test_function.parameters(), lr=0.1)
+optimizer = optim.SGD(test_function.parameters(), lr=0.01)
 costs = dgl.cost_functional()
-loss_fn = nn.MSELoss(reduction = 'mean')
-#loss_fn = nn.L1Loss()
+#loss_fn = nn.MSELoss(reduction = 'mean') #optimizer with lr= 0.1
+loss_fn = nn.L1Loss()#
 
 for i in range(100):
     Writer.add_scalar('test/pretraining', test_function(torch.tensor([[i/100]], dtype = torch.float)), i)
@@ -86,10 +86,10 @@ x = torch.tensor(x, dtype=torch.float)
 x_square = torch.tensor(x_square, dtype=torch.float)
 
 train_data = TensorDataset(x, x_square)
-train_loader = DataLoader(dataset= train_data, batch_size = 32, shuffle = False)
+train_loader = DataLoader(dataset= train_data, batch_size = 1, shuffle = False)
 
-for epoch in range(2):
-    break
+for epoch in range(0):
+    #break
     print("epoch")
     for x_batch, y_batch in train_loader:
         test_function.train()
@@ -111,13 +111,13 @@ for i in range(100):
 
 
 kosten = dgl.cost_functional()
-for epoch in range(1000):
-    x = [np.random.rand(1) for i in range(32)] 
+for epoch in range(1):#0000):
+    x = [np.random.rand(1) for i in range(5)] 
     x = torch.tensor(x, dtype = torch.float)
     x = torch.unsqueeze(x, 1)
     x_square = torch.square(x)
 
-    ones = torch.ones(32,1,1)
+    ones = torch.ones(5,1, 1)
 
     test_function.train()
     y_hat = test_function(x)
@@ -132,9 +132,9 @@ for epoch in range(1000):
     #print('the same as: ',torch.matmul(ones, torch.matmul(Q,y_hat))) yes!
 
     #points = torch.matmul(ones, torch.matmul(Q,y_hat))+ torch.matmul(x, torch.matmul(R,x))
-    #loss = (kosten.approx_costs_three(y_hat,x_square, ones, 1))**3
-    #loss = (kosten.approx_costs_three(y_hat,x_square, ones, 1))**2
-    loss = kosten.approx_costs_three(x, y_hat, ones, 1)
+    #loss = (kosten.approx_costs(y_hat,x_square, ones, 1))**3
+    #loss = (kosten.approx_costs(y_hat,x_square, ones, 1))**2
+    loss = kosten.approx_costs(x, y_hat, ones, 1)
     
     #print("is ", points)
     #print("the same as: ", y_hat - x_square) yes

@@ -2,7 +2,9 @@ import numpy as np
 import torch
 import model
 import itertools
+import timeit
 
+from torch.utils.data import TensorDataset, ConcatDataset
 
 class Dataset():
     def __init__(self):
@@ -15,59 +17,36 @@ class Dataset():
         self.pde = dgl()
         self.kosten = cost_functional()
 
-    def create_triple(self, starting_point = None, control_value = None):
-        if control_value == None:
-            print("no control value")
-            control_value = torch.tensor([[0]], dtype= torch.float)
-        elif isinstance(control_value, int) or isinstance(control_value, float):
-            control_value = torch.tensor([[control_value]], dtype= torch.float)
-        else:
-            print("control value during triple: ",control_value)
-            raise ControlError('unknown control format during creation of triple')
-
+    def create_double(self, starting_point = None, control_value = None):
         '''creation of starting point'''
-        if starting_point == None:
-            pass
-        elif isinstance(starting_point, int) or isinstance(starting_point, float):
-            starting_point = torch.tensor([[starting_point]], dtype = torch.float)
-        else:
-            pass
-            #print("starting point is: ", type(starting_point))
-
-        #print("+++++control_value: ", control_value)
-        trajectory = self.pde.euler_step(stepsize = self.stepsize, total_steps = self.support_points, last_point = starting_point, control= control_value)
-        #print("trajectory: ", trajectory)
-        return [trajectory, control_value]
+        trajectory, controls = self.pde.euler_step(stepsize = self.stepsize, total_steps = self.support_points, last_point = starting_point, control= control_value)
+        return trajectory, controls
 
     def create_dataset(self, control_value = None, starting_point = None):
-        self.dataset = []
-        self.dataset.append(self.create_triple(starting_point = starting_point, control_value = control_value))
+        x_output = torch.empty(self.amount_x, self.support_points +1 , starting_point.size()[0], starting_point.size()[1])
+        u_output = torch.empty(self.amount_x, self.support_points +1 , starting_point.size()[0], starting_point.size()[1])
+        
+        x, u = self.create_double(starting_point = starting_point, control_value = control_value)
+        x_output[0] = x
+        u_output[0] = u
         for i in range(self.amount_x-1):
-            self.dataset.append(self.create_triple(starting_point= self.dataset[-1][0][-1], control_value = control_value))
-            '''if self.dataset[0][-1] > self.dataset[0][0]:
-                print("Growing state!")
-                break
-            if self.dataset[0][-1] < - self.dataset[0][0]:
-                print("state runs negative")
-                break
-            '''
-        #print(self.dataset)
-        return self.dataset
-
-    def create_dataset_different_controls(self):
-        controls = [0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10]
-        #assert len(controls) == self.amount_controls
-        for con in controls:
-            self.datasets.append(self.create_dataset(control = con))
-        return self.datasets
+            x, u = self.create_double(starting_point = x_output[i][-1], control_value = control_value)
+            x_output[i+1] = x
+            u_output[i+1] = u
+        dataset = TensorDataset(x_output, u_output)
+        return dataset
 
     def create_dataset_different_control_and_starts(self):
-        controls = [-(1 +i/2) for i in range(7)]
-        starting_points = [torch.tensor([[np.random.rand(1)]], dtype = torch.float) for i in range(100)]#starting from 0 starts default -> staring from 1
-        #assert len(controls) == self.amount_controls
+        controls = [-(5 -i/2) for i in range(7)]
+        starting_points = np.random.rand(100)
+        controls = torch.unsqueeze(torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
+        starting_points =torch.unsqueeze(torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1), 1)
+        datasets=[]
         for i in itertools.product(controls, starting_points):
-            self.datasets.append(self.create_dataset(control_value = i[0], starting_point = i[1]))
-        return self.datasets
+            datasets.append(self.create_dataset(control_value=i[0], starting_point=i[1]))
+
+        datasets= ConcatDataset(datasets)
+        return datasets
 
 
 
@@ -82,62 +61,40 @@ class dgl:
 
     def euler_step(self, stepsize = 0.1,total_steps = 1, last_point=None, control = None):
         control = torch.tensor([[0]], dtype=torch.float) if not control else control
-        
-        assert len(control) ==1 #for testing purpose
 
-        if not last_point: last_point = self.x_0
-        output = [last_point]
+        output_traj = torch.unsqueeze(last_point, 1)
+        con_value = torch.matmul(control, last_point) #control only has one []
+        output_control = torch.unsqueeze(con_value, 1)#maybe do not unsqueeze it?!
         for i in range(total_steps):
-            last_point = last_point + stepsize * self.rhs(last_point, torch.matmul(control, last_point))
-            output.append(last_point)
-        return output
+            last_point = last_point + stepsize * self.rhs(last_point, con_value)
+            output_traj = torch.cat((output_traj,torch.unsqueeze(last_point, 1)))
+            con_value = torch.matmul(control, last_point)
+            output_control = torch.cat((output_control,torch.unsqueeze(con_value, 1)))
+
+        return output_traj, output_control
 
 
 class cost_functional:
     def __init__(self):
         self.Q = torch.tensor([[1]],dtype=torch.float)
         self.R = torch.tensor([[-1]], dtype = torch.float)
-    '''
-    def approx_costs(self, x_values, l_control_values, r_control_values, x_size):
-        '''
-        #returns the integral over xQx + uRU$
-    '''
-        points = [torch.matmul(x, torch.matmul(self.Q,x))+ torch.matmul(l_u, torch.matmul(self.R,r_u)) for (x,l_u, r_u) in zip(x_values, l_control_values, r_control_values)]
-        integral = 0
-        for support_point in points:
-            integral += support_point
-        integral = x_size* integral/len(points)
-        return integral
-        '''
+
     def approx_costs(self, x_values, l_control_values, r_control_values, x_size):
         '''
         #returns the integral over xQx + uRU$
         '''
-        points = torch.matmul(x_values, torch.matmul(self.Q,x_values))+ torch.matmul(l_control_values, torch.matmul(self.R,r_control_values))
-        integral = torch.mean(points)
-        return integral * x_size
 
-    def approx_costs_two(self, x_values, l_control_values, r_control_values, x_size):
-        points = torch.matmul(x_values, torch.matmul(self.Q,x_values))+ torch.matmul(l_control_values, torch.matmul(self.R,r_control_values))
-        train_data = TensorDataset(points)
-        train_loader = DataLoader(dataset = train_data, batch_size=32, shuffle = False)
-        #maybe: return train_loader???
-        for x_batch in train_loader:
-            test_function.train()
-            y_hat = new_control #.....
-            
-            loss = loss_fn(y_batch, y_hat)
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-
-    def approx_costs_three(self, x_values, l_control_values, r_control_values, x_size):
         '''
-        #returns the integral over xQx + uRU$
+        #this is for checking if the square works also in batches:
+
+        print('x_values: ', x_values)
+        print('x_values times 1',torch.matmul(self.Q,x_values))
+        print('quadrat: ', torch.matmul(x_values, torch.matmul(self.Q,x_values)))
         '''
         points = torch.matmul(x_values, torch.matmul(self.Q,x_values))+ torch.matmul(l_control_values, torch.matmul(self.R,r_control_values))
-        squares = torch.square(points)
-        integral = torch.mean(squares)
+        #summands = torch.square(points)
+        summands = torch.abs(points)
+        integral = torch.mean(summands)
         return integral * x_size
 
 

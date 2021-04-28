@@ -5,9 +5,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 
-x =torch.eye(1)
-print(x)
-x.requires_grad_(True)
 
 
 def approx_function(x):
