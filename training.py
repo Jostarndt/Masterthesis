@@ -29,11 +29,11 @@ class error():
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
 
         #WITH OPTIMAL VALUE FUNCTION:
-        #overall_loss =  torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][0]))) - torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][-1]))) + control_loss
+        overall_loss =  torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][0]))) - torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][-1]))) + control_loss
 
 
         #WITH OPTIMAL CONTROL
-        
+        '''
         optimal_vector = 0.04*torch.matmul(trajectory,torch.matmul(self.R,trajectory)) + 0.4*torch.matmul(trajectory, torch.matmul(self.R,control)) - torch.matmul(trajectory, torch.matmul(self.Q, trajectory))
         optimal_vector = 0.1*torch.mean(optimal_vector)
         #optimal_vector_two =-(  0.5*torch.square(trajectory[0][0]) - 0.5*torch.square(trajectory[0][-1]))
@@ -41,10 +41,43 @@ class error():
         overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))).detach() +optimal_vector
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][-1]) +optimal_vector
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0])
-        
+        '''
 
-        overall_loss = torch.square(overall_loss) + torch.square(value_function(torch.tensor([[0]], dtype = torch.float)))
+        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0]], dtype = torch.float)))
         return overall_loss
+    def value_iteration(self,trajectory, control, old_control, new_control, value_function):
+        old_controls = old_control(trajectory).detach()
+        new_controls= new_control(trajectory).detach()
+        difference = old_controls - control
+
+        points_a = torch.matmul(trajectory, torch.matmul(self.Q,trajectory))+ torch.matmul(old_controls, torch.matmul(self.R, old_controls))
+        points_b = torch.matmul(new_controls, torch.matmul(self.R, difference))
+        points_together = 2*points_b - points_a
+
+        control_loss =0.1* torch.mean(points_together)#WHY 0.1???
+        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
+
+        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0]], dtype = torch.float)))
+        return overall_loss
+
+
+    def policy_improvement(self,trajectory, control, old_control, new_control, value_function):
+        old_controls = old_control(trajectory)
+        new_controls= new_control(trajectory)
+        difference = old_controls - control
+
+        points_a = torch.matmul(trajectory, torch.matmul(self.Q,trajectory))+ torch.matmul(old_controls, torch.matmul(self.R, old_controls))
+        
+        points_b = torch.matmul(new_controls, torch.matmul(self.R, difference))
+
+        points_together = 2*points_b - points_a
+        control_loss =0.1* torch.mean(points_together)
+        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
+        overall_loss =  torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][0]))) - torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][-1]))) + control_loss
+
+        overall_loss = torch.square(overall_loss)
+        return overall_loss
+
 
 if __name__ == '__main__':
     Writer = SummaryWriter()
@@ -91,14 +124,27 @@ if __name__ == '__main__':
             control_optimizer.zero_grad()
             value_optimizer.zero_grad()
 
-            control_error = error.value_error_external(x, u, old_control, new_control, value_function)
-            control_error.backward()
+            #control_error = error.value_error_external(x, u, old_control, new_control, value_function)
+            #control_error.backward()
+
+            value_error= error.value_iteration(x, u, old_control, new_control, value_function)
+            value_error.backward()
             value_optimizer.step()
-            #control_optimizer.step()
+
+            control_optimizer.zero_grad()
+            value_optimizer.zero_grad()
+
+            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function)
+            policy_error.backward()
+            control_optimizer.step()
+
             if j%100 == 0:
-                Writer.add_scalar('error', control_error, j)
+                #Writer.add_scalar('error', control_error, j)
+                Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
                 old_control = deepcopy(new_control)
             j +=1
+        for i in range(100):
+            Writer.add_scalar('value_function/approx_epoch_'+str(epoch), value_function(torch.tensor([[i/100]], dtype = torch.float)), i)
 
     for i in range(100):
         Writer.add_scalar('control/after training', new_control(torch.tensor([[i/100]], dtype = torch.float)),i)
@@ -107,5 +153,5 @@ if __name__ == '__main__':
         Writer.add_scalar('cost_function/optimal', 0.5 * i/100 * i/100, i)
         Writer.add_scalar('cost_function/suboptimal', -25.5 * i/100 * i/100, i)
     #pdb.set_trace()
-    for i in range(1000):
-        Writer.add_scalar('cost_function/approximation', value_function(torch.tensor([[i/1000]], dtype = torch.float)), i)
+    for i in range(100):
+        Writer.add_scalar('cost_function/approximation', value_function(torch.tensor([[i/100]], dtype = torch.float)), i)
