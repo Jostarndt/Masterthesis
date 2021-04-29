@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 import pdb
 
+
 class error():
     def __init__(self):
         self.costs = dgl.cost_functional()
@@ -72,8 +73,8 @@ class error():
 
         points_together = 2*points_b - points_a
         control_loss =0.1* torch.mean(points_together)
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
-        overall_loss =  torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][0]))) - torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][-1]))) + control_loss
+        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
+        #overall_loss =  torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][0]))) - torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][-1]))) + control_loss
 
         overall_loss = torch.square(overall_loss)
         return overall_loss
@@ -103,7 +104,10 @@ if __name__ == '__main__':
     costs = dgl.cost_functional()
 
     control_optimizer = optim.SGD(new_control.parameters(), lr=0.5)
-    value_optimizer = optim.SGD(value_function.parameters(), lr=0.3)
+    value_optimizer = optim.SGD(value_function.parameters(), lr=0.2)#ideally 0.3
+
+    lmbda = lambda epoch : 0.996
+    scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
 
     #value_function.load_state_dict(torch.load('./models/pretrained_value'))
     #old_control.load_state_dict(torch.load('./models/pretrained_control'))

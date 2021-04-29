@@ -6,6 +6,7 @@ import timeit
 
 from torch.utils.data import TensorDataset, ConcatDataset
 
+
 class Dataset():
     def __init__(self):
         self.support_points = 10 #amount of euler steps / steps in the integral
