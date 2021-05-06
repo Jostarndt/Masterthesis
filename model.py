@@ -46,12 +46,21 @@ class critic(nn.Module):
         self.s_dim = space_dim
         self.fc1 = nn.Linear(space_dim, 40)#6
         self.fc2 = nn.Linear(40, 1)
+        
         if positive:
             pass
             self.fc1.weight = torch.nn.parameter.Parameter(torch.abs(self.fc1.weight))
             self.fc2.weight =  torch.nn.parameter.Parameter(torch.abs(self.fc2.weight))
             self.fc1.bias =  torch.nn.parameter.Parameter(torch.abs(self.fc1.bias))
             self.fc2.bias =  torch.nn.parameter.Parameter(torch.abs(self.fc2.bias))
+        '''
+        if positive:
+            pass
+            self.fc1.weight = torch.nn.parameter.Parameter(torch.zeros(self.fc1.weight.shape))
+            self.fc2.weight =  torch.nn.parameter.Parameter(torch.zeros(self.fc2.weight.shape))
+            self.fc1.bias =  torch.nn.parameter.Parameter(torch.zeros(self.fc1.bias.shape))
+            self.fc2.bias =  torch.nn.parameter.Parameter(torch.zeros(self.fc2.bias.shape))
+        '''
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)

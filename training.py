@@ -46,6 +46,8 @@ class error():
 
         overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0]], dtype = torch.float)))
         return overall_loss
+
+
     def value_iteration(self,trajectory, control, old_control, new_control, value_function):
         old_controls = old_control(trajectory).detach()
         new_controls= new_control(trajectory).detach()
@@ -55,10 +57,24 @@ class error():
         points_b = torch.matmul(new_controls, torch.matmul(self.R, difference))
         points_together = 2*points_b - points_a
 
-        control_loss =0.1* torch.mean(points_together)#WHY 0.1???
+        control_loss =0.1* torch.mean(points_together)
         overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
 
-        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0]], dtype = torch.float)))
+
+        #WITH OPTIMAL CONTROL
+        '''
+        optimal_vector = 0.04*torch.matmul(trajectory,torch.matmul(self.R,trajectory)) + 0.4*torch.matmul(trajectory, torch.matmul(self.R,control)) - torch.matmul(trajectory, torch.matmul(self.Q, trajectory))
+        optimal_vector = 0.1*torch.mean(optimal_vector)
+        #optimal_vector_two =-(  0.5*torch.square(trajectory[0][0]) - 0.5*torch.square(trajectory[0][-1]))
+
+        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))).detach() +optimal_vector
+        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][-1]) +optimal_vector
+        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0])
+        '''
+
+
+
+        overall_loss = torch.square(overall_loss) + torch.square(value_function(torch.tensor([[0]], dtype = torch.float)))
         return overall_loss
 
 
@@ -98,15 +114,17 @@ if __name__ == '__main__':
     '''
 
     print("##################################")
-    old_control = model.actor(stabilizing = True)#TODO: make this admissible!
+    old_control = model.actor(stabilizing = True)
     new_control = model.actor()
     value_function = model.critic(positive = True)
     costs = dgl.cost_functional()
 
     control_optimizer = optim.SGD(new_control.parameters(), lr=0.5)
-    value_optimizer = optim.SGD(value_function.parameters(), lr=0.2)#ideally 0.3
+    value_optimizer = optim.SGD(value_function.parameters(), lr=0.2)#ideally 0.3, 0.2 is better
+    #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
+    #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
-    lmbda = lambda epoch : 0.996
+    lmbda = lambda epoch :0.8# 0.996
     scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
 
     #value_function.load_state_dict(torch.load('./models/pretrained_value'))
@@ -122,7 +140,7 @@ if __name__ == '__main__':
     #Training
     j = 0
     for epoch in range(10):
-        print("epoch")
+        print("epoch: ", epoch)
         for x, u in train_loader:
             #print(x, u)
             control_optimizer.zero_grad()
@@ -132,6 +150,7 @@ if __name__ == '__main__':
             #control_error.backward()
 
             value_error= error.value_iteration(x, u, old_control, new_control, value_function)
+            assert value_error !=  0
             value_error.backward()
             value_optimizer.step()
 
@@ -139,16 +158,21 @@ if __name__ == '__main__':
             value_optimizer.zero_grad()
 
             policy_error = error.policy_improvement(x, u, old_control, new_control, value_function)
+            assert policy_error !=  0
             policy_error.backward()
             control_optimizer.step()
 
             if j%100 == 0:
                 #Writer.add_scalar('error', control_error, j)
+                #Writer.add_scalar('learning rate', scheduler.get_lr()[0], j)
+                #print('lr: ', scheduler.get_lr())
                 Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
                 old_control = deepcopy(new_control)
             j +=1
+        #scheduler.step()
         for i in range(100):
             Writer.add_scalar('value_function/approx_epoch_'+str(epoch), value_function(torch.tensor([[i/100]], dtype = torch.float)), i)
+            Writer.add_scalar('control_function/approx_epoch_'+str(epoch), new_control(torch.tensor([[i/100]], dtype = torch.float)), i)
 
     for i in range(100):
         Writer.add_scalar('control/after training', new_control(torch.tensor([[i/100]], dtype = torch.float)),i)

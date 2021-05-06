@@ -39,7 +39,7 @@ class Dataset():
 
     def create_dataset_different_control_and_starts(self):
         controls = [-(5 -i/2) for i in range(7)]
-        starting_points = np.random.rand(100)
+        starting_points =np.random.rand(100)
         controls = torch.unsqueeze(torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
         starting_points =torch.unsqueeze(torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1), 1)
         datasets=[]
