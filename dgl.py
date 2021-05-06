@@ -78,7 +78,7 @@ class dgl:
 class cost_functional:
     def __init__(self):
         self.Q = torch.tensor([[1]],dtype=torch.float)
-        self.R = torch.tensor([[-1]], dtype = torch.float)
+        self.R = torch.tensor([[0.5]], dtype = torch.float)
 
     def approx_costs(self, x_values, l_control_values, r_control_values, x_size):
         '''
