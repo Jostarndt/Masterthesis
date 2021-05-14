@@ -13,110 +13,94 @@ import pdb
 class error():
     def __init__(self):
         self.costs = dgl.cost_functional()
-        self.Q = torch.tensor([[1]],dtype=torch.float)
-        self.R = torch.tensor([[0.5]], dtype = torch.float)
-
-    def value_error_external(self,trajectory, control, old_control, new_control, value_function):
-        old_controls = old_control(trajectory)
-        new_controls= new_control(trajectory)
-        difference = old_controls - control
-
-        points_a = torch.matmul(trajectory, torch.matmul(self.Q,trajectory))+ torch.matmul(old_controls, torch.matmul(self.R, old_controls))
-        
-        points_b = torch.matmul(new_controls, torch.matmul(self.R, difference))
-
-        points_together = 2*points_b - points_a
-        control_loss =0.1* torch.mean(points_together)#WHY 0.1???
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
-
-        #WITH OPTIMAL VALUE FUNCTION:
-        overall_loss =  torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][0]))) - torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][-1]))) + control_loss
-
-
-        #WITH OPTIMAL CONTROL
-        '''
-        optimal_vector = 0.04*torch.matmul(trajectory,torch.matmul(self.R,trajectory)) + 0.4*torch.matmul(trajectory, torch.matmul(self.R,control)) - torch.matmul(trajectory, torch.matmul(self.Q, trajectory))
-        optimal_vector = 0.1*torch.mean(optimal_vector)
-        #optimal_vector_two =-(  0.5*torch.square(trajectory[0][0]) - 0.5*torch.square(trajectory[0][-1]))
-
-        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))).detach() +optimal_vector
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][-1]) +optimal_vector
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0])
-        '''
-
-        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0]], dtype = torch.float)))
-        return overall_loss
-
+        self.Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
+        self.R = torch.tensor([[1]], dtype = torch.float)
 
     def value_iteration(self,trajectory, control, old_control, new_control, value_function):
-        old_controls = old_control(trajectory).detach()
-        new_controls= new_control(trajectory).detach()
-        difference = old_controls - control
+        traj = torch.squeeze(trajectory, 0)
 
-        points_a = torch.matmul(trajectory, torch.matmul(self.Q,trajectory))+ torch.matmul(old_controls, torch.matmul(self.R, old_controls))
-        points_b = torch.matmul(new_controls, torch.matmul(self.R, difference))
+        old_controls = old_control(traj).detach()
+        new_controls= new_control(traj).detach()
+        difference = old_controls - control
+        #points_a = torch.matmul(trajectory, torch.matmul(self.Q,trajectory))+ torch.matmul(old_controls, torch.matmul(self.R, old_controls))
+        oc = torch.squeeze(old_controls, 0)
+        points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
+
+        diff = torch.squeeze(difference, 0)
+        points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
         points_together = 2*points_b - points_a
 
         control_loss =0.1* torch.mean(points_together)
-        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
+        #pdb.set_trace()
+        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss 
+ 
+
 
 
         #WITH OPTIMAL CONTROL
-        '''
-        optimal_vector = 0.04*torch.matmul(trajectory,torch.matmul(self.R,trajectory)) + 0.4*torch.matmul(trajectory, torch.matmul(self.R,control)) - torch.matmul(trajectory, torch.matmul(self.Q, trajectory))
-        optimal_vector = 0.1*torch.mean(optimal_vector)
-        #optimal_vector_two =-(  0.5*torch.square(trajectory[0][0]) - 0.5*torch.square(trajectory[0][-1]))
-
-        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))).detach() +optimal_vector
+ 
+        #optimal_vector = 0.04*torch.matmul(trajectory,torch.matmul(self.R,trajectory)) + 0.4*torch.matmul(trajectory, torch.matmul(self.R,control)) - torch.matmul(trajectory, torch.matmul(self.Q, trajectory))
+        #optimal_vector = 0.1*torch.mean(optimal_vector)
+        
+        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))).detach() +optimal_vector
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][-1]) +optimal_vector
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0])
-        '''
+
+        #training on optimal solution
+        #pdb.set_trace()
+        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1])
+        
 
 
 
-        overall_loss = torch.square(overall_loss) + torch.square(value_function(torch.tensor([[0]], dtype = torch.float)))
-        return overall_loss
 
+        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
+
+        return overall_loss#TODO add here the value of value_function(0)
 
     def policy_improvement(self,trajectory, control, old_control, new_control, value_function):
-        old_controls = old_control(trajectory)
-        new_controls= new_control(trajectory)
+        traj = torch.squeeze(trajectory, 0)
+        old_controls = old_control(traj)
+        new_controls= new_control(traj)
         difference = old_controls - control
 
-        points_a = torch.matmul(trajectory, torch.matmul(self.Q,trajectory))+ torch.matmul(old_controls, torch.matmul(self.R, old_controls))
-        
-        points_b = torch.matmul(new_controls, torch.matmul(self.R, difference))
+        oc= torch.squeeze(old_controls, 0)
+
+        points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
+
+        diff = torch.squeeze(difference, 0)
+        points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
 
         points_together = 2*points_b - points_a
         control_loss =0.1* torch.mean(points_together)
-        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
+        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
+        #pdb.set_trace()
+        overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][0]**2- 0.5* traj[0][0][-1]**2 - traj[0][0][-1]**2  + control_loss
         #overall_loss =  torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][0]))) - torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][-1]))) + control_loss
 
         overall_loss = torch.square(overall_loss)
         return overall_loss
-
 
 if __name__ == '__main__':
     Writer = SummaryWriter()
     error = error()
     dataset = dgl.Dataset()
     output = dataset.create_dataset_different_control_and_starts()
-    train_loader = DataLoader(dataset = output, batch_size = 1, shuffle = True)
+    train_loader = DataLoader(dataset = output, batch_size = 1, shuffle =False )
 
     ''' 
     ##########
     #plotting of the trajectories
     ##########
-    for i, trajectory in enumerate(dataset.datasets):
-        for j, section in enumerate(trajectory):
-            for k, point in enumerate(section[0][:-1]):
-                Writer.add_scalar('trajectory/'+str(i)+' control: '+str(section[1]), point, k+(len(section[0])-1)*j)
+    for i,piece in enumerate(output):
+        for step in range(piece[0].size()[0]):
+            Writer.add_scalars('trajectories', {'first coord'+str(i): piece[0][step][0][0], 'second coord'+str(i): piece[0][step][0][1]}, step)
+        #Writer.add_histogram('trajectories', 
     '''
 
     print("##################################")
-    old_control = model.actor(stabilizing = True)
-    new_control = model.actor()
-    value_function = model.critic(positive = True)
+    old_control = model.actor(stabilizing = True, control_dim = 1, space_dim = 2)
+    new_control = model.actor(stabilizing = True, control_dim = 1, space_dim = 2)
+    value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
     control_optimizer = optim.SGD(new_control.parameters(), lr=0.5)
@@ -124,19 +108,9 @@ if __name__ == '__main__':
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
-    lmbda = lambda epoch :0.8# 0.996
-    scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
-
-    #value_function.load_state_dict(torch.load('./models/pretrained_value'))
-    #old_control.load_state_dict(torch.load('./models/pretrained_control'))
-    #new_control.load_state_dict(torch.load('./models/pretrained_control'))
-
-
-    for i in range(100):
-        Writer.add_scalar('cost_function/pretraining', value_function(torch.tensor([[i/100]], dtype = torch.float)), i)
-        Writer.add_scalar('control/pretraining', new_control(torch.tensor([[i/100]], dtype = torch.float)),i)
-
-
+    #lmbda = lambda epoch :0.8# 0.996
+    #scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
+    
     #Training
     j = 0
     for epoch in range(10):
@@ -145,9 +119,6 @@ if __name__ == '__main__':
             #print(x, u)
             control_optimizer.zero_grad()
             value_optimizer.zero_grad()
-
-            #control_error = error.value_error_external(x, u, old_control, new_control, value_function)
-            #control_error.backward()
 
             value_error= error.value_iteration(x, u, old_control, new_control, value_function)
             assert value_error !=  0
@@ -163,23 +134,48 @@ if __name__ == '__main__':
             control_optimizer.step()
 
             if j%100 == 0:
-                #Writer.add_scalar('error', control_error, j)
-                #Writer.add_scalar('learning rate', scheduler.get_lr()[0], j)
-                #print('lr: ', scheduler.get_lr())
                 Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
                 old_control = deepcopy(new_control)
             j +=1
         #scheduler.step()
-        for i in range(100):
-            Writer.add_scalar('value_function/approx_epoch_'+str(epoch), value_function(torch.tensor([[i/100]], dtype = torch.float)), i)
-            Writer.add_scalar('control_function/approx_epoch_'+str(epoch), new_control(torch.tensor([[i/100]], dtype = torch.float)), i)
+    '''
+    index = np.linspace(0,1,100)
+    mesh = np.transpose(np.meshgrid(index, index))
+    mesh = mesh.reshape(10000,2)
+    z = np.array([[-x_1*x_2] for (x_1, x_2) in mesh])
 
-    for i in range(100):
-        Writer.add_scalar('control/after training', new_control(torch.tensor([[i/100]], dtype = torch.float)),i)
-        Writer.add_scalar('control/optimal', -0.2*i/100, i)
-        Writer.add_scalar('control/suboptimal', 10.2 * i/100, i)
-        Writer.add_scalar('cost_function/optimal', 0.5 * i/100 * i/100, i)
-        Writer.add_scalar('cost_function/suboptimal', -25.5 * i/100 * i/100, i)
-    #pdb.set_trace()
-    for i in range(100):
-        Writer.add_scalar('cost_function/approximation', value_function(torch.tensor([[i/100]], dtype = torch.float)), i)
+    pdb.set_trace()
+    opt_control = np.hstack((mesh, z))
+    Writer.add_embedding(opt_control, tag= 'optimal control')
+    Writer.close()
+    '''
+    int_const = value_function(torch.tensor([[0,0]], dtype= torch.float)).detach()
+    op_val_img = np.zeros((3,100,100))
+    op_con_img = np.zeros((3,100,100))
+    con_img = np.zeros((3,100,100))
+    val_img = np.zeros((3,100,100))
+    for x_1 in range(100):
+        for x_2 in range(100):
+            op_con_img[0][x_1][x_2] = -x_1 * x_2
+            op_val_img[0][x_1][x_2] = 0.5*x_1**2 + x_2**2
+            val_img[0][x_1][x_2] = value_function(torch.tensor([[x_1, x_2]], dtype = torch.float)).detach() - int_const
+            con_img[0][x_1][x_2] = old_control(torch.tensor([[x_1, x_2]], dtype = torch.float)).detach()
+    #rescaling the images:
+    val_max = max(np.amax(val_img), np.amax(op_val_img))
+    val_min = min(np.amin(val_img), np.amin(op_val_img))
+    con_max = max(np.amax(con_img), np.amax(op_con_img))
+    con_min = min(np.amin(con_img), np.amin(op_con_img))
+    
+    pdb.set_trace()
+    val_img = (val_img-val_max)/(val_max - val_min)
+    con_img = (con_img-con_max)/(con_max - con_min)
+    op_val_img = (op_val_img-val_max)/(val_max-val_min)
+    op_con_img = (op_con_img-con_max)/(con_max-con_min)
+    
+    Writer.add_image('optimal value', op_val_img , 0)
+    Writer.add_image('optimal control function', op_con_img , 0)
+    Writer.add_image('value_function', val_img , 0)
+    Writer.add_image('control_function', con_img , 0)
+    Writer.close()
+    print('done')
+    
