@@ -117,6 +117,7 @@ if __name__ == '__main__':
         print("epoch: ", epoch)
         for x, u in train_loader:
             #print(x, u)
+            #pdb.set_trace()
             control_optimizer.zero_grad()
             value_optimizer.zero_grad()
 
@@ -156,10 +157,10 @@ if __name__ == '__main__':
     val_img = np.zeros((3,100,100))
     for x_1 in range(100):
         for x_2 in range(100):
-            op_con_img[0][x_1][x_2] = -x_1 * x_2
-            op_val_img[0][x_1][x_2] = 0.5*x_1**2 + x_2**2
-            val_img[0][x_1][x_2] = value_function(torch.tensor([[x_1, x_2]], dtype = torch.float)).detach() - int_const
-            con_img[0][x_1][x_2] = old_control(torch.tensor([[x_1, x_2]], dtype = torch.float)).detach()
+            op_con_img[0][x_1][x_2] = -x_1/1000 * x_2/1000 
+            op_val_img[0][x_1][x_2] = 0.5*(x_1/1000) **2 + (x_2/1000 )**2
+            val_img[0][x_1][x_2] = value_function(torch.tensor([[x_1/1000 , x_2/1000 ]], dtype = torch.float)).detach() - int_const
+            con_img[0][x_1][x_2] = old_control(torch.tensor([[x_1/1000 , x_2/1000]], dtype = torch.float)).detach()
     #rescaling the images:
     val_max = max(np.amax(val_img), np.amax(op_val_img))
     val_min = min(np.amin(val_img), np.amin(op_val_img))
