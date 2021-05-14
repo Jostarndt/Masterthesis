@@ -39,17 +39,8 @@ class Dataset():
         return dataset
 
     def create_dataset_different_control_and_starts(self):
-        controls = [-(5 -i/2) for i in range(7)]
-        starting_points =np.random.rand(100)
-        controls = torch.unsqueeze(torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
-        starting_points =torch.unsqueeze(torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1), 1)
-
-
-        #print(controls)
-        #print(starting_points)
-
-
-        controls = [[-i/2,-j/2] for i,j in zip(range(5), range(5))]
+        controls = [[-i/2,-j/2] for i,j in zip(range(1, 5), range(1, 5))]
+        print(controls)
         controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
         #controls = [-i/2 for i in range(7)]
         #controls = torch.unsqueeze(torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
@@ -63,7 +54,6 @@ class Dataset():
         datasets=[]
         for i in itertools.product(controls, starting_points):
             datasets.append(self.create_dataset(control_value=i[0], starting_point=i[1]))
-
         datasets= ConcatDataset(datasets)
         return datasets
 
@@ -71,29 +61,24 @@ class Dataset():
 
 class dgl:
     def __init__(self, x_0 = None):
-        self.A = torch.tensor([[-1]], dtype= torch.float)
-        self.B = torch.tensor([[0.2]], dtype= torch.float)
         self.x_0 = torch.tensor([[1]], dtype= torch.float) if not x_0 else x_0
 
     def rhs(self, x, u):
-        first_part =torch.unsqueeze(torch.unsqueeze( -x[0][0] + x[0][0], 0), 1)
+        first_part =torch.unsqueeze(torch.unsqueeze( -x[0][0] + x[0][1], 0), 1)
         second_part = -0.5*(x[0][0] + x[0][1]) + 0.5* x[0][0]**2*x[0][1] + x[0][0]*u
-        print(first_part)
-        print(second_part)
-        #pdb.set_trace()
         output = torch.stack((first_part, second_part))
-        return output #torch.matmul(self.A,x) +torch.matmul(self.B,u)
+        return torch.squeeze(output ,1)#torch.matmul(self.A,x) +torch.matmul(self.B,u)
 
     def euler_step(self, stepsize = 0.1,total_steps = 1, last_point=None, control = None):
-        #control = torch.tensor([[0]], dtype=torch.float) if not control else control
-
         output_traj = torch.unsqueeze(last_point, 1)
         #pdb.set_trace()
         con_value = torch.matmul(control, last_point.transpose(0,1))
-        #con_value = torch.matmul(control, last_point)
         output_control = torch.unsqueeze(con_value, 1)#maybe do not unsqueeze it?!
         for i in range(total_steps):
-            last_point = last_point + stepsize * self.rhs(last_point, con_value)
+            #pdb.set_trace()
+            last_point = last_point + stepsize * self.rhs(last_point, con_value).transpose(-1,0)
+            #pdb.set_trace()
+            #output_traj = torch.cat((output_traj,last_point)))
             output_traj = torch.cat((output_traj,torch.unsqueeze(last_point, 1)))
             con_value = torch.matmul(control, last_point.transpose(0,1))
             output_control = torch.cat((output_control,torch.unsqueeze(con_value, 1)))
