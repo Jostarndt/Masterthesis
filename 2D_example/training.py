@@ -85,7 +85,7 @@ if __name__ == '__main__':
     error = error()
     dataset = dgl.Dataset()
     output = dataset.create_dataset_different_control_and_starts()
-    train_loader = DataLoader(dataset = output, batch_size = 1, shuffle =False )
+    train_loader = DataLoader(dataset = output, batch_size = 1, shuffle =True )
 
     ''' 
     ##########
