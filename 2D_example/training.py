@@ -48,8 +48,6 @@ class error():
         #training on optimal solution
         #pdb.set_trace()
         overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1])
-        
-
 
 
 
@@ -59,6 +57,7 @@ class error():
 
     def policy_improvement(self,trajectory, control, old_control, new_control, value_function):
         traj = torch.squeeze(trajectory, 0)
+        '''
         old_controls = old_control(traj)
         new_controls= new_control(traj)
         difference = old_controls - control
@@ -75,7 +74,12 @@ class error():
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
         #pdb.set_trace()
         overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][0]**2- 0.5* traj[0][0][-1]**2 - traj[0][0][-1]**2  + control_loss
-        #overall_loss =  torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][0]))) - torch.squeeze(torch.squeeze(0.5*torch.square(trajectory[0][-1]))) + control_loss
+
+        #completely fake it:
+        #pdb.set_trace()
+        '''
+        #overall_loss = 0.1*torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
+        overall_loss = torch.sum(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
 
         overall_loss = torch.square(overall_loss)
         return overall_loss
@@ -103,14 +107,14 @@ if __name__ == '__main__':
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=0.5)
+    control_optimizer = optim.SGD(new_control.parameters(), lr=5)#0.5
     value_optimizer = optim.SGD(value_function.parameters(), lr=0.2)#ideally 0.3, 0.2 is better
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
     #lmbda = lambda epoch :0.8# 0.996
     #scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
-    
+ 
     #Training
     j = 0
     for epoch in range(10):
@@ -157,26 +161,40 @@ if __name__ == '__main__':
     val_img = np.zeros((3,100,100))
     for x_1 in range(100):
         for x_2 in range(100):
+            #print("tuple: ", x_1/1000, x_2/1000)
             op_con_img[0][x_1][x_2] = -x_1/1000 * x_2/1000 
             op_val_img[0][x_1][x_2] = 0.5*(x_1/1000) **2 + (x_2/1000 )**2
             val_img[0][x_1][x_2] = value_function(torch.tensor([[x_1/1000 , x_2/1000 ]], dtype = torch.float)).detach() - int_const
             con_img[0][x_1][x_2] = old_control(torch.tensor([[x_1/1000 , x_2/1000]], dtype = torch.float)).detach()
     #rescaling the images:
+
     val_max = max(np.amax(val_img), np.amax(op_val_img))
     val_min = min(np.amin(val_img), np.amin(op_val_img))
     con_max = max(np.amax(con_img), np.amax(op_con_img))
     con_min = min(np.amin(con_img), np.amin(op_con_img))
     
-    pdb.set_trace()
-    val_img = (val_img-val_max)/(val_max - val_min)
-    con_img = (con_img-con_max)/(con_max - con_min)
-    op_val_img = (op_val_img-val_max)/(val_max-val_min)
-    op_con_img = (op_con_img-con_max)/(con_max-con_min)
+    print(np.amin(op_con_img))
+    print('con max, con min', con_max, con_min)
+
+    print("control at zero:",new_control(torch.tensor([[0,0]], dtype= torch.float)))
+    print("control at 1,1:",new_control(torch.tensor([[0.1,0.1]], dtype= torch.float)))
+
+    
+
+    print(con_img[0], 'con img')
+    print(op_con_img[0], 'op con img')
+
+    val_img = (val_img-val_min)/(val_max - val_min)
+    con_img = (con_img-con_min)/(con_max - con_min)
+    op_val_img = (op_val_img-val_min)/(val_max-val_min)
+    op_con_img = (op_con_img-con_min)/(con_max-con_min)
     
     Writer.add_image('optimal value', op_val_img , 0)
     Writer.add_image('optimal control function', op_con_img , 0)
     Writer.add_image('value_function', val_img , 0)
     Writer.add_image('control_function', con_img , 0)
     Writer.close()
+    print(con_img[0], 'con img')
+    print(op_con_img[0], 'op con img')
     print('done')
     
