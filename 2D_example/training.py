@@ -58,29 +58,31 @@ class error():
     def policy_improvement(self,trajectory, control, old_control, new_control, value_function):
         traj = torch.squeeze(trajectory, 0)
         '''
+        '''
         old_controls = old_control(traj)
         new_controls= new_control(traj)
         difference = old_controls - control
 
         oc= torch.squeeze(old_controls, 0)
-
         points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
 
         diff = torch.squeeze(difference, 0)
+        pdb.set_trace()
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
-
+        pdb.set_trace()
         points_together = 2*points_b - points_a
+        pdb.set_trace()
         control_loss =0.1* torch.mean(points_together)
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
-        #pdb.set_trace()
-        overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][0]**2- 0.5* traj[0][0][-1]**2 - traj[0][0][-1]**2  + control_loss
+        
+        pdb.set_trace()
+        compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + control_loss 
+        overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
 
-        #completely fake it:
-        #pdb.set_trace()
-        '''
         #overall_loss = 0.1*torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
-        overall_loss = torch.sum(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
-
+        #overall_loss = torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
+        #overall_loss =torch.mean(torch.square(new_control(traj)+torch.ones(11).unsqueeze(1).unsqueeze(1))) 
+        #pdb.set_trace()
         overall_loss = torch.square(overall_loss)
         return overall_loss
 
@@ -102,12 +104,12 @@ if __name__ == '__main__':
     '''
 
     print("##################################")
-    old_control = model.actor(stabilizing = True, control_dim = 1, space_dim = 2)
-    new_control = model.actor(stabilizing = True, control_dim = 1, space_dim = 2)
+    old_control = model.actor(stabilizing = False, control_dim = 1, space_dim = 2)
+    new_control = model.actor(stabilizing = False, control_dim = 1, space_dim = 2)
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=5)#0.5
+    control_optimizer = optim.SGD(new_control.parameters(), lr=0.5)#0.5
     value_optimizer = optim.SGD(value_function.parameters(), lr=0.2)#ideally 0.3, 0.2 is better
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
@@ -120,8 +122,8 @@ if __name__ == '__main__':
     for epoch in range(10):
         print("epoch: ", epoch)
         for x, u in train_loader:
-            #print(x, u)
-            #pdb.set_trace()
+            pdb.set_trace()
+            print(x, u)
             control_optimizer.zero_grad()
             value_optimizer.zero_grad()
 
@@ -134,11 +136,12 @@ if __name__ == '__main__':
             value_optimizer.zero_grad()
 
             policy_error = error.policy_improvement(x, u, old_control, new_control, value_function)
-            assert policy_error !=  0
+            #assert policy_error !=  0
             policy_error.backward()
             control_optimizer.step()
 
             if j%100 == 0:
+                print(policy_error)
                 Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
                 old_control = deepcopy(new_control)
             j +=1

@@ -26,8 +26,8 @@ class Dataset():
 
     def create_dataset(self, control_value = None, starting_point = None):
         x_output = torch.empty(self.amount_x, self.support_points +1 , starting_point.size()[0], starting_point.size()[1])
-        u_output = torch.empty(self.amount_x, self.support_points +1 , starting_point.size()[0], starting_point.size()[1])
-        
+        u_output = torch.empty(self.amount_x, self.support_points +1 , starting_point.size()[0], 1)
+ 
         x, u = self.create_double(starting_point = starting_point, control_value = control_value)
         x_output[0] = x
         u_output[0] = u
@@ -72,14 +72,10 @@ class dgl:
 
     def euler_step(self, stepsize = 0.1,total_steps = 1, last_point=None, control = None):
         output_traj = torch.unsqueeze(last_point, 1)
-        #pdb.set_trace()
         con_value = torch.matmul(control, last_point.transpose(0,1))
         output_control = torch.unsqueeze(con_value, 1)#maybe do not unsqueeze it?!
         for i in range(total_steps):
-            #pdb.set_trace()
             last_point = last_point + stepsize * self.rhs(last_point, con_value).transpose(-1,0)
-            #pdb.set_trace()
-            #output_traj = torch.cat((output_traj,last_point)))
             output_traj = torch.cat((output_traj,torch.unsqueeze(last_point, 1)))
             con_value = torch.matmul(control, last_point.transpose(0,1))
             output_control = torch.cat((output_control,torch.unsqueeze(con_value, 1)))
