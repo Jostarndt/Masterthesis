@@ -30,7 +30,7 @@ class error():
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
         points_together = 2*points_b - points_a
 
-        control_loss =0.1* torch.mean(points_together)
+        control_loss =0.2* torch.mean(points_together)
         #pdb.set_trace()
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss 
  
@@ -57,9 +57,8 @@ class error():
 
     def policy_improvement(self,trajectory, control, old_control, new_control, value_function):
         traj = torch.squeeze(trajectory, 0)
-        '''
-        '''
-        old_controls = old_control(traj)
+        
+        old_controls = old_control(traj).detach()
         new_controls= new_control(traj)
         difference = old_controls - control
 
@@ -67,23 +66,30 @@ class error():
         points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
 
         diff = torch.squeeze(difference, 0)
-        pdb.set_trace()
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
-        pdb.set_trace()
         points_together = 2*points_b - points_a
-        pdb.set_trace()
-        control_loss =0.1* torch.mean(points_together)
+        control_loss =0.2* torch.mean(points_together)
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
-        
+
+        '''
+        compare_diff = torch.squeeze(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2)- torch.squeeze(control, 1), 0)
+        compare_b = torch.matmul(new_controls, torch.matmul(self.R, compare_diff))
+        compare_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2), torch.matmul(self.R, -torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2).transpose(1,2)))
+        compare_loss = 0.1*torch.mean(2*compare_b -compare_a)
         pdb.set_trace()
-        compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + control_loss 
+        compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
+        '''
+        #pdb.set_trace()
         overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
 
+        
         #overall_loss = 0.1*torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
         #overall_loss = torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
         #overall_loss =torch.mean(torch.square(new_control(traj)+torch.ones(11).unsqueeze(1).unsqueeze(1))) 
-        #pdb.set_trace()
-        overall_loss = torch.square(overall_loss)
+        
+
+        #overall_loss = torch.square(overall_loss)
+        overall_loss = torch.abs(overall_loss)
         return overall_loss
 
 if __name__ == '__main__':
@@ -122,8 +128,6 @@ if __name__ == '__main__':
     for epoch in range(10):
         print("epoch: ", epoch)
         for x, u in train_loader:
-            pdb.set_trace()
-            print(x, u)
             control_optimizer.zero_grad()
             value_optimizer.zero_grad()
 

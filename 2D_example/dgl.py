@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset, ConcatDataset
 
 class Dataset():
     def __init__(self):
-        self.support_points = 10 #amount of euler steps / steps in the integral
+        self.support_points =20  #amount of euler steps / steps in the integral
         self.amount_x = 2 #amount of points of x on which V is getting trained. Note: trajectory has actual lengh of amount_x * support_points
         self.stepsize = 0.01 #stepsize for the euler steps, stepsize = distance of x from above / support points => distance of 0.3 
         #NOTE!! if you change this you have to change 'approx_costs' in train.py TWO TIMES!
@@ -45,7 +45,7 @@ class Dataset():
         controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
         #controls = [-i/2 for i in range(7)]
         #controls = torch.unsqueeze(torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
-        starting_points =np.random.rand(100,2)
+        starting_points =np.random.rand(200,2)
         starting_points =torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1)*0.1 #multiplication to adapt to starting point given in problem formulation
 
         print(starting_points)
