@@ -33,25 +33,13 @@ class error():
         control_loss =0.2* torch.mean(points_together)
         #pdb.set_trace()
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss 
- 
 
-
-
-        #WITH OPTIMAL CONTROL
- 
-        #optimal_vector = 0.04*torch.matmul(trajectory,torch.matmul(self.R,trajectory)) + 0.4*torch.matmul(trajectory, torch.matmul(self.R,control)) - torch.matmul(trajectory, torch.matmul(self.Q, trajectory))
-        #optimal_vector = 0.1*torch.mean(optimal_vector)
-        
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))).detach() +optimal_vector
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][-1]) +optimal_vector
-
-        #training on optimal solution
+        #training on optimal solution: v(x) = 0.5x_1 ^2 + x_2 ^2
         #pdb.set_trace()
         overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1])
 
-
-
         overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
+        #overall_loss = torch.abs(overall_loss)
 
         return overall_loss#TODO add here the value of value_function(0)
 
@@ -115,8 +103,8 @@ if __name__ == '__main__':
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=0.5)#0.5
-    value_optimizer = optim.SGD(value_function.parameters(), lr=0.2)#ideally 0.3, 0.2 is better
+    control_optimizer = optim.SGD(new_control.parameters(), lr=0.05) #i am unsure about this
+    value_optimizer = optim.SGD(value_function.parameters(), lr=0.05)
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
@@ -135,19 +123,20 @@ if __name__ == '__main__':
             assert value_error !=  0
             value_error.backward()
             value_optimizer.step()
+            
+            if epoch > 0:
+                control_optimizer.zero_grad()
+                value_optimizer.zero_grad()
 
-            control_optimizer.zero_grad()
-            value_optimizer.zero_grad()
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function)
+                #assert policy_error !=  0
+                policy_error.backward()
+                control_optimizer.step()
 
-            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function)
-            #assert policy_error !=  0
-            policy_error.backward()
-            control_optimizer.step()
-
-            if j%100 == 0:
-                print(policy_error)
-                Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
-                old_control = deepcopy(new_control)
+                if j%100 == 0:
+                    print(policy_error)
+                    Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
+                    old_control = deepcopy(new_control)
             j +=1
         #scheduler.step()
     '''
