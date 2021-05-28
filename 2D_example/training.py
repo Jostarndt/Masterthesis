@@ -21,17 +21,14 @@ class error():
 
         old_controls = old_control(traj).detach()
         new_controls= new_control(traj).detach()
-        difference = old_controls - control
-        #points_a = torch.matmul(trajectory, torch.matmul(self.Q,trajectory))+ torch.matmul(old_controls, torch.matmul(self.R, old_controls))
+        diff = torch.squeeze(old_controls - control, 0)
         oc = torch.squeeze(old_controls, 0)
-        points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
 
-        diff = torch.squeeze(difference, 0)
+        points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
         points_together = 2*points_b - points_a
 
         control_loss =0.2* torch.mean(points_together)
-        #pdb.set_trace()
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss 
 
         #training on optimal solution: v(x) = 0.5x_1 ^2 + x_2 ^2
@@ -48,15 +45,15 @@ class error():
         
         old_controls = old_control(traj).detach()
         new_controls= new_control(traj)
-        difference = old_controls - control
+        diff = torch.squeeze(old_controls - control, 0)
 
         oc= torch.squeeze(old_controls, 0)
         points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
-
-        diff = torch.squeeze(difference, 0)
-        points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
+        points_b = torch.matmul(new_controls, torch.matmul(self.R, diff.transpose(1,2)))
         points_together = 2*points_b - points_a
+
         control_loss =0.2* torch.mean(points_together)
+        overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
         #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
 
         '''
@@ -67,11 +64,9 @@ class error():
         pdb.set_trace()
         compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
         '''
-        #pdb.set_trace()
-        overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
-
+        #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
         
-        #overall_loss = 0.1*torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
+        #overall_loss = 0.2*torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
         #overall_loss = torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
         #overall_loss =torch.mean(torch.square(new_control(traj)+torch.ones(11).unsqueeze(1).unsqueeze(1))) 
         
@@ -79,6 +74,10 @@ class error():
         #overall_loss = torch.square(overall_loss)
         overall_loss = torch.abs(overall_loss)
         return overall_loss
+
+
+def optimal_value_function(traj):
+    return 0.5* traj[0,0]**2 + traj[0,1]**2 
 
 if __name__ == '__main__':
     Writer = SummaryWriter()
@@ -103,7 +102,7 @@ if __name__ == '__main__':
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=0.05) #i am unsure about this
+    control_optimizer = optim.SGD(new_control.parameters(), lr=0.005) #i am unsure about this
     value_optimizer = optim.SGD(value_function.parameters(), lr=0.05)
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
@@ -116,15 +115,29 @@ if __name__ == '__main__':
     for epoch in range(10):
         print("epoch: ", epoch)
         for x, u in train_loader:
-            control_optimizer.zero_grad()
-            value_optimizer.zero_grad()
+            if epoch < 5:
+                control_optimizer.zero_grad()
+                value_optimizer.zero_grad()
 
-            value_error= error.value_iteration(x, u, old_control, new_control, value_function)
-            assert value_error !=  0
-            value_error.backward()
-            value_optimizer.step()
+                value_error= error.value_iteration(x, u, old_control, new_control, value_function)
+                assert value_error !=  0
+                value_error.backward()
+                value_optimizer.step()
             
-            if epoch > 0:
+            if epoch < 10:
+                control_optimizer.zero_grad()
+                value_optimizer.zero_grad()
+
+                policy_error = error.policy_improvement(x, u, old_control, new_control, optimal_value_function)
+                #assert policy_error !=  0
+                policy_error.backward()
+                control_optimizer.step()
+
+                if j%100 == 0:
+                    print(policy_error)
+                    Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
+                    old_control = deepcopy(new_control)
+            if epoch >= 5:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
@@ -137,6 +150,7 @@ if __name__ == '__main__':
                     print(policy_error)
                     Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
                     old_control = deepcopy(new_control)
+
             j +=1
         #scheduler.step()
     '''
@@ -192,5 +206,10 @@ if __name__ == '__main__':
     Writer.close()
     print(con_img[0], 'con img')
     print(op_con_img[0], 'op con img')
+    
+    print('-----------------------')
+    print(val_img[0], 'val img')
+    print(op_val_img[0], 'op val img')
+    
     print('done')
     
