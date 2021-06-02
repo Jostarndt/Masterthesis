@@ -16,9 +16,9 @@ batch_size = 2
 class actor(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
         super(actor, self).__init__()
-        self.fc1 = nn.Linear(space_dim, 20*space_dim)
-        self.fc2 = nn.Linear(20*space_dim, 10*space_dim)
-        self.fc3 = nn.Linear(10*space_dim, control_dim)
+        self.fc1 = nn.Linear(space_dim, 5*space_dim)
+        self.fc2 = nn.Linear(5*space_dim, 4*space_dim)
+        self.fc3 = nn.Linear(4*space_dim, control_dim)
         if stabilizing:
             self.fc1.weight = torch.nn.parameter.Parameter(torch.zeros(self.fc1.weight.shape))
             self.fc1.bias = torch.nn.parameter.Parameter(torch.zeros(self.fc1.bias.shape))
@@ -37,8 +37,8 @@ class critic(nn.Module):
     def __init__(self, space_dim=1, positive = False):
         super(critic, self).__init__()
         self.s_dim = space_dim
-        self.fc1 = nn.Linear(space_dim, 40)#6
-        self.fc2 = nn.Linear(40, 1)
+        self.fc1 = nn.Linear(space_dim, 30)
+        self.fc2 = nn.Linear(30, 1)
         
         if positive:
             pass

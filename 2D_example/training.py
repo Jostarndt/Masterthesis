@@ -16,7 +16,7 @@ class error():
         self.Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
         self.R = torch.tensor([[1]], dtype = torch.float)
 
-    def value_iteration(self,trajectory, control, old_control, new_control, value_function):
+    def value_iteration(self,trajectory, control, old_control, new_control, value_function, on_optimum):
         traj = torch.squeeze(trajectory, 0)
 
         old_controls = old_control(traj).detach()
@@ -29,18 +29,17 @@ class error():
         points_together = 2*points_b - points_a
 
         control_loss =0.2* torch.mean(points_together)
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss 
-
-        #training on optimal solution: v(x) = 0.5x_1 ^2 + x_2 ^2
-        #pdb.set_trace()
-        overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1])
+        
+        if on_optimum == True:
+            overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1]) #TODO make sure this is correct
+        elif on_optimum == False:
+            overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss 
 
         overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
-        #overall_loss = torch.abs(overall_loss)
+        
+        return overall_loss
 
-        return overall_loss#TODO add here the value of value_function(0)
-
-    def policy_improvement(self,trajectory, control, old_control, new_control, value_function):
+    def policy_improvement(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5):
         traj = torch.squeeze(trajectory, 0)
         
         old_controls = old_control(traj).detach()
@@ -53,8 +52,13 @@ class error():
         points_together = 2*points_b - points_a
 
         control_loss =0.2* torch.mean(points_together)
-        overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
-        #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss
+        #this is either on optimum or on the given value_function
+        #overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
+        #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
+
+        overall_loss = op_factor*(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()).squeeze() + (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
+
+        #print((value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()-0.5* traj[0][0][0]**2 - traj[0][0][1]**2 + 0.5* traj[-1][0][0]**2 + traj[-1][0][1]**2))
 
         '''
         compare_diff = torch.squeeze(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2)- torch.squeeze(control, 1), 0)
@@ -64,7 +68,6 @@ class error():
         pdb.set_trace()
         compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
         '''
-        #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
         
         #overall_loss = 0.2*torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
         #overall_loss = torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
@@ -77,7 +80,8 @@ class error():
 
 
 def optimal_value_function(traj):
-    return 0.5* traj[0,0]**2 + traj[0,1]**2 
+    #TODO disturbations seem to bring huge instability
+    return (0.5* traj[0,0]**2 + traj[0,1]**2)*1
 
 if __name__ == '__main__':
     Writer = SummaryWriter()
@@ -115,20 +119,33 @@ if __name__ == '__main__':
     for epoch in range(10):
         print("epoch: ", epoch)
         for x, u in train_loader:
-            if epoch < 5:
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-
-                value_error= error.value_iteration(x, u, old_control, new_control, value_function)
-                assert value_error !=  0
-                value_error.backward()
-                value_optimizer.step()
-            
+           
+            #Value iteration
             if epoch < 10:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, optimal_value_function)
+                value_error= error.value_iteration(x, u, old_control, new_control, value_function, on_optimum = True)
+                assert value_error !=  0
+                value_error.backward()
+                value_optimizer.step()
+            
+            if epoch >= 40:
+                control_optimizer.zero_grad()
+                value_optimizer.zero_grad()
+
+                value_error= error.value_iteration(x, u, old_control, new_control, value_function, on_optimum = False)
+                assert value_error !=  0
+                value_error.backward()
+                value_optimizer.step()
+
+
+            #policy improvement
+            if epoch < 4 or epoch >= 6:
+                control_optimizer.zero_grad()
+                value_optimizer.zero_grad()
+
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0)
                 #assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
@@ -137,17 +154,19 @@ if __name__ == '__main__':
                     print(policy_error)
                     Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
                     old_control = deepcopy(new_control)
-            if epoch >= 5:
+            if epoch >= 4 and epoch < 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function)
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0.5)
                 #assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
 
                 if j%100 == 0:
-                    print(policy_error)
+                    print(policy_error, 'policy error')
+                    #print(optimal_value_function(x[0][0])-value_function(x[0][0]) + value_function(torch.tensor([[0,0]], dtype = torch.float)), 'difference a')
+                    #print(optimal_value_function(x[0][-1])-value_function(x[0][-1])+ value_function(torch.tensor([[0,0]], dtype = torch.float)), 'difference b')
                     Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
                     old_control = deepcopy(new_control)
 
@@ -165,6 +184,7 @@ if __name__ == '__main__':
     Writer.close()
     '''
     int_const = value_function(torch.tensor([[0,0]], dtype= torch.float)).detach()
+    print(int_const, ' - this is the integration constant')
     op_val_img = np.zeros((3,100,100))
     op_con_img = np.zeros((3,100,100))
     con_img = np.zeros((3,100,100))
