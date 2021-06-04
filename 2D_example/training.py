@@ -87,14 +87,20 @@ if __name__ == '__main__':
     Writer = SummaryWriter()
     error = error()
     dataset = dgl.Dataset()
-    output = dataset.create_dataset_different_control_and_starts()
-    train_loader = DataLoader(dataset = output, batch_size = 1, shuffle =True )
+    trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=200)
+    train_loader = DataLoader(dataset = trainset, batch_size = 1, shuffle =True)
+
+    
+    testset = dataset.create_dataset_different_control_and_starts(amount_startpoints=20)
+    test_loader = DataLoader(dataset = testset, batch_size = 1, shuffle =True)
+    
+    dataset_stretch_factor = len(train_loader)/len(test_loader)
 
     ''' 
     ##########
     #plotting of the trajectories
     ##########
-    for i,piece in enumerate(output):
+    for i,piece in enumerate(trainset):
         for step in range(piece[0].size()[0]):
             Writer.add_scalars('trajectories', {'first coord'+str(i): piece[0][step][0][0], 'second coord'+str(i): piece[0][step][0][1]}, step)
         #Writer.add_histogram('trajectories', 
@@ -111,15 +117,18 @@ if __name__ == '__main__':
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
-    #lmbda = lambda epoch :0.8# 0.996
-    #scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
+    lmbda = lambda epoch :1# 0.996
+    value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
  
     #Training
     j = 0
     for epoch in range(10):
         print("epoch: ", epoch)
-        for x, u in train_loader:
-           
+        ''''TRAIN'''
+        old_control.train()
+        value_function.train()
+        new_control.train()
+        for j,(x, u) in enumerate(train_loader):
             #Value iteration
             if epoch < 10:
                 control_optimizer.zero_grad()
@@ -139,7 +148,6 @@ if __name__ == '__main__':
                 value_error.backward()
                 value_optimizer.step()
 
-
             #policy improvement
             if epoch < 4 or epoch >= 6:
                 control_optimizer.zero_grad()
@@ -150,9 +158,9 @@ if __name__ == '__main__':
                 policy_error.backward()
                 control_optimizer.step()
 
-                if j%100 == 0:
+                if (j + len(train_loader)*epoch) %100 == 0:
                     print(policy_error)
-                    Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
+                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
                     old_control = deepcopy(new_control)
             if epoch >= 4 and epoch < 6:
                 control_optimizer.zero_grad()
@@ -163,26 +171,26 @@ if __name__ == '__main__':
                 policy_error.backward()
                 control_optimizer.step()
 
-                if j%100 == 0:
+                if (j + len(train_loader)*epoch) %100 == 0:
                     print(policy_error, 'policy error')
+                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error}, j + len(train_loader)*epoch)
                     #print(optimal_value_function(x[0][0])-value_function(x[0][0]) + value_function(torch.tensor([[0,0]], dtype = torch.float)), 'difference a')
                     #print(optimal_value_function(x[0][-1])-value_function(x[0][-1])+ value_function(torch.tensor([[0,0]], dtype = torch.float)), 'difference b')
-                    Writer.add_scalars('errors', {'policy error': policy_error,'value_error':value_error}, j)
                     old_control = deepcopy(new_control)
 
-            j +=1
-        #scheduler.step()
-    '''
-    index = np.linspace(0,1,100)
-    mesh = np.transpose(np.meshgrid(index, index))
-    mesh = mesh.reshape(10000,2)
-    z = np.array([[-x_1*x_2] for (x_1, x_2) in mesh])
 
-    pdb.set_trace()
-    opt_control = np.hstack((mesh, z))
-    Writer.add_embedding(opt_control, tag= 'optimal control')
-    Writer.close()
-    '''
+        '''TESTING'''
+        old_control.eval()
+        value_function.eval()
+        new_control.eval()
+        for j, (x, u) in enumerate(test_loader):
+            value_error= error.value_iteration(x, u, old_control, new_control, value_function, on_optimum = True)
+            
+            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0)
+            Writer.add_scalars('errors', {'test policy error': policy_error,'test value_error':value_error},(j + len(test_loader)*epoch)*dataset_stretch_factor )
+ 
+        value_scheduler.step()
+    
     int_const = value_function(torch.tensor([[0,0]], dtype= torch.float)).detach()
     print(int_const, ' - this is the integration constant')
     op_val_img = np.zeros((3,100,100))

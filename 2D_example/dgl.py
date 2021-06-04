@@ -38,14 +38,14 @@ class Dataset():
         dataset = TensorDataset(x_output, u_output)
         return dataset
 
-    def create_dataset_different_control_and_starts(self):
+    def create_dataset_different_control_and_starts(self, amount_startpoints):
         controls = [[-i/10,-j/10] for i,j in zip(range(1, 5), range(1, 5))]
         #controls = [[-i/10,-j/10] for i,j in itertools.product(range(1, 5), range(1, 5))]
         print(controls)
         controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
         #controls = [-i/2 for i in range(7)]
         #controls = torch.unsqueeze(torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
-        starting_points =np.random.rand(200,2)
+        starting_points =np.random.rand(amount_startpoints,2)
         starting_points =torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1)*0.1 #multiplication to adapt to starting point given in problem formulation
 
         print(starting_points)
