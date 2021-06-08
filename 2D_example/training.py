@@ -56,7 +56,7 @@ class error():
         #overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
         #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
 
-        overall_loss = op_factor*(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()).squeeze() + (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
+        #overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
 
         #print((value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()-0.5* traj[0][0][0]**2 - traj[0][0][1]**2 + 0.5* traj[-1][0][0]**2 + traj[-1][0][1]**2))
 
@@ -68,14 +68,14 @@ class error():
         pdb.set_trace()
         compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
         '''
-        
+        new_control.zero_grad()
+        #pdb.set_trace()
         #overall_loss = 0.2*torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
-        #overall_loss = torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
-        #overall_loss =torch.mean(torch.square(new_control(traj)+torch.ones(11).unsqueeze(1).unsqueeze(1))) 
+        overall_loss = torch.mean(torch.square(new_control(traj)+torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
+        #overall_loss =torch.mean(torch.square(new_control(traj)+torch.ones(21).unsqueeze(1).unsqueeze(1))) 
         
-
-        #overall_loss = torch.square(overall_loss)
-        overall_loss = torch.abs(overall_loss)
+        
+        #overall_loss = torch.abs(overall_loss)
         return overall_loss
 
 
@@ -153,7 +153,7 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0)
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1)
                 #assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
@@ -162,6 +162,7 @@ if __name__ == '__main__':
                     print(policy_error)
                     Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
                     old_control = deepcopy(new_control)
+            
             if epoch >= 4 and epoch < 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
@@ -221,6 +222,7 @@ if __name__ == '__main__':
 
     print(con_img[0], 'con img')
     print(op_con_img[0], 'op con img')
+    print('-----------------------')
 
     val_img = (val_img-val_min)/(val_max - val_min)
     con_img = (con_img-con_min)/(con_max - con_min)
