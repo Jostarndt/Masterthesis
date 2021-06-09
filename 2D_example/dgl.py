@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset, ConcatDataset
 
 class Dataset():
     def __init__(self):
-        self.support_points =20  #amount of euler steps / steps in the integral
+        self.support_points =5  #amount of euler steps / steps in the integral
         self.amount_x = 2 #amount of points of x on which V is getting trained. Note: trajectory has actual lengh of amount_x * support_points
         self.stepsize = 0.01 #stepsize for the euler steps, stepsize = distance of x from above / support points => distance of 0.3 
         #NOTE!! if you change this you have to change 'approx_costs' in train.py TWO TIMES!

@@ -16,9 +16,9 @@ batch_size = 2
 class actor(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
         super(actor, self).__init__()
-        self.fc1 = nn.Linear(space_dim, 5*space_dim)
-        self.fc2 = nn.Linear(5*space_dim, 4*space_dim)
-        self.fc3 = nn.Linear(4*space_dim, control_dim)
+        self.fc1 = nn.Linear(space_dim, 50*space_dim)
+        self.fc2 = nn.Linear(50*space_dim, 50*space_dim)
+        self.fc3 = nn.Linear(50*space_dim, control_dim)
         if stabilizing:
             self.fc1.weight = torch.nn.parameter.Parameter(torch.zeros(self.fc1.weight.shape))
             self.fc1.bias = torch.nn.parameter.Parameter(torch.zeros(self.fc1.bias.shape))
