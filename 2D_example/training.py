@@ -42,7 +42,6 @@ class error():
     def policy_improvement(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5):
         traj = torch.squeeze(trajectory, 0)
         
-        '''
         old_controls = old_control(traj).detach()
         new_controls= new_control(traj)
         diff = torch.squeeze(old_controls - control, 0)
@@ -51,32 +50,38 @@ class error():
         points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff.transpose(1,2)))
         points_together = 2*points_b - points_a
-
-        control_loss =0.05* torch.mean(points_together)
+        control_loss =0.05* torch.mean(points_together)#TODO this is anyways always positive?
         #this is either on optimum or on the given value_function
         #overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
         #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
-
         overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
 
         #print((value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()-0.5* traj[0][0][0]**2 - traj[0][0][1]**2 + 0.5* traj[-1][0][0]**2 + traj[-1][0][1]**2))
 
         '''
-        '''
-        compare_diff = torch.squeeze(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2)- torch.squeeze(control, 1), 0)
-        compare_b = torch.matmul(new_controls, torch.matmul(self.R, compare_diff))
-        compare_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2), torch.matmul(self.R, -torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2).transpose(1,2)))
-        compare_loss = 0.1*torch.mean(2*compare_b -compare_a)
-        pdb.set_trace()
-        compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
+            compare_diff = torch.squeeze(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2)- torch.squeeze(control, 1), 0)
+            compare_b = torch.matmul(new_controls, torch.matmul(self.R, compare_diff))
+            compare_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2), torch.matmul(self.R, -torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2).transpose(1,2)))
+            compare_loss = 0.1*torch.mean(2*compare_b -compare_a)
+            pdb.set_trace()
+            compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
         '''
         #new_control.zero_grad()
-        overall_loss = 0.05*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
+        #overall_loss = 0.05*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
         #overall_loss = torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
         #overall_loss =torch.mean(torch.abs(new_control(traj)+torch.ones(6).unsqueeze(1).unsqueeze(1))) 
         
-        #overall_loss = torch.abs(overall_loss)
+        overall_loss = torch.abs(overall_loss)
         return overall_loss
+
+    def policy_warmup(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5):
+        traj = torch.squeeze(trajectory, 0)
+        
+        new_control.zero_grad()
+        overall_loss = 0.05*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
+        return overall_loss
+
+
 
 
 def optimal_value_function(traj):
@@ -119,12 +124,24 @@ if __name__ == '__main__':
 
     lmbda = lambda epoch :1# 0.996
     value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
+
+    #Warmup
+    for epoch in range(3):
+        print("warmup: ", epoch)
+        old_control.train()
+        value_function.train()
+        new_control.train()
+        for j,(x, u) in enumerate(train_loader):
+            control_optimizer.zero_grad()
+            value_optimizer.zero_grad()
+            policy_error = error.policy_warmup(x, u, old_control, new_control, value_function, op_factor = 1)
+            #assert policy_error !=  0
+            policy_error.backward()
+            control_optimizer.step()
  
     #Training
-    j = 0
     for epoch in range(10):
         print("epoch: ", epoch)
-        ''''TRAIN'''
         old_control.train()
         value_function.train()
         new_control.train()
@@ -168,7 +185,7 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0.5)
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1)
                 #assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
@@ -189,7 +206,7 @@ if __name__ == '__main__':
         for j, (x, u) in enumerate(test_loader):
             value_error= error.value_iteration(x, u, old_control, new_control, value_function, on_optimum = True)
             
-            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0)
+            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1)
             Writer.add_scalars('errors', {'test policy error': policy_error,'test value_error':value_error},(j + len(test_loader)*epoch)*dataset_stretch_factor )
  
         value_scheduler.step()
