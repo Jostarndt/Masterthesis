@@ -81,12 +81,53 @@ class error():
         overall_loss = 0.05*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
         return overall_loss
 
-
-
-
 def optimal_value_function(traj):
     #TODO disturbations seem to bring huge instability
     return (0.5* traj[0,0]**2 + traj[0,1]**2)*1
+
+def present_results(value_function, new_control, stepname= "after_training"):
+    int_const = value_function(torch.tensor([[0,0]], dtype= torch.float)).detach()
+    print(int_const, ' - this is the integration constant')
+    op_val_img = np.zeros((3,100,100))
+    op_con_img = np.zeros((3,100,100))
+    con_img = np.zeros((3,100,100))
+    val_img = np.zeros((3,100,100))
+    for x_1 in range(100):
+        for x_2 in range(100):
+            #print("tuple: ", x_1/1000, x_2/1000)
+            op_con_img[0][x_1][x_2] = - x_1/1000 * x_2/1000 
+            op_val_img[0][x_1][x_2] = 0.5*(x_1/1000) **2 + (x_2/1000 )**2
+            val_img[0][x_1][x_2] = value_function(torch.tensor([[x_1/1000 , x_2/1000 ]], dtype = torch.float)).detach() - int_const
+            #print(x_1/1000, x_2/1000)
+            con_img[0][x_1][x_2] = new_control(torch.tensor([[x_1/1000 , x_2/1000]], dtype = torch.float)).detach()
+    
+    #rescaling the images:
+    val_max = max(np.amax(val_img), np.amax(op_val_img))
+    val_min = min(np.amin(val_img), np.amin(op_val_img))
+    con_max = max(np.amax(con_img), np.amax(op_con_img))
+    con_min = min(np.amin(con_img), np.amin(op_con_img))
+    
+    print(con_img[0], 'con img')
+    print(op_con_img[0], 'op con img')
+    print('-----------------------')
+
+    val_img = (val_img-val_min)/(val_max - val_min)
+    con_img = (con_img-con_min)/(con_max - con_min)
+    op_val_img = (op_val_img-val_min)/(val_max-val_min)
+    op_con_img = (op_con_img-con_min)/(con_max-con_min)
+    
+    Writer.add_image('optimal value/'+stepname, op_val_img , 0)
+    Writer.add_image('optimal control function/'+stepname, op_con_img , 0)
+    Writer.add_image('value_function/'+stepname, val_img , 0)
+    Writer.add_image('control_function/'+stepname, con_img , 0)
+    Writer.close()
+    print(con_img[0], 'con img')
+    print(op_con_img[0], 'op con img')
+    
+    print('-----------------------')
+    print(val_img[0], 'val img')
+    print(op_val_img[0], 'op val img')
+
 
 if __name__ == '__main__':
     Writer = SummaryWriter()
@@ -102,13 +143,13 @@ if __name__ == '__main__':
     dataset_stretch_factor = len(train_loader)/len(test_loader)
 
     ''' 
-    ##########
-    #plotting of the trajectories
-    ##########
-    for i,piece in enumerate(trainset):
-        for step in range(piece[0].size()[0]):
-            Writer.add_scalars('trajectories', {'first coord'+str(i): piece[0][step][0][0], 'second coord'+str(i): piece[0][step][0][1]}, step)
-        #Writer.add_histogram('trajectories', 
+        ##########
+        #plotting of the trajectories
+        ##########
+        for i,piece in enumerate(trainset):
+            for step in range(piece[0].size()[0]):
+                Writer.add_scalars('trajectories', {'first coord'+str(i): piece[0][step][0][0], 'second coord'+str(i): piece[0][step][0][1]}, step)
+            #Writer.add_histogram('trajectories', 
     '''
 
     print("##################################")
@@ -138,8 +179,9 @@ if __name__ == '__main__':
             #assert policy_error !=  0
             policy_error.backward()
             control_optimizer.step()
- 
-    #Training
+    present_results(value_function, new_control, 'after_warmup')
+
+    #Training and Testing
     for epoch in range(10):
         print("epoch: ", epoch)
         old_control.train()
@@ -147,7 +189,7 @@ if __name__ == '__main__':
         new_control.train()
         for j,(x, u) in enumerate(train_loader):
             #Value iteration
-            if False:#epoch < 10:
+            if epoch < 10:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
@@ -177,8 +219,8 @@ if __name__ == '__main__':
 
                 if (j + len(train_loader)*epoch) %100 == 0:
                     print(policy_error)
-                    #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
-                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
+                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
+                    #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
                     old_control = deepcopy(new_control)
             
             if epoch >= 4 and epoch < 6:
@@ -193,7 +235,7 @@ if __name__ == '__main__':
                 if (j + len(train_loader)*epoch) %100 == 0:
                     print(policy_error, 'policy error')
                     #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error}, j + len(train_loader)*epoch)
-                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0}, j + len(train_loader)*epoch)
+                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error}, j + len(train_loader)*epoch)
                     #print(optimal_value_function(x[0][0])-value_function(x[0][0]) + value_function(torch.tensor([[0,0]], dtype = torch.float)), 'difference a')
                     #print(optimal_value_function(x[0][-1])-value_function(x[0][-1])+ value_function(torch.tensor([[0,0]], dtype = torch.float)), 'difference b')
                     old_control = deepcopy(new_control)
@@ -211,55 +253,8 @@ if __name__ == '__main__':
  
         value_scheduler.step()
     
-    int_const = value_function(torch.tensor([[0,0]], dtype= torch.float)).detach()
-    print(int_const, ' - this is the integration constant')
-    op_val_img = np.zeros((3,100,100))
-    op_con_img = np.zeros((3,100,100))
-    con_img = np.zeros((3,100,100))
-    val_img = np.zeros((3,100,100))
-    for x_1 in range(100):
-        for x_2 in range(100):
-            #print("tuple: ", x_1/1000, x_2/1000)
-            op_con_img[0][x_1][x_2] = - x_1/1000 * x_2/1000 
-            op_val_img[0][x_1][x_2] = 0.5*(x_1/1000) **2 + (x_2/1000 )**2
-            val_img[0][x_1][x_2] = value_function(torch.tensor([[x_1/1000 , x_2/1000 ]], dtype = torch.float)).detach() - int_const
-            #print(x_1/1000, x_2/1000)
-            con_img[0][x_1][x_2] = old_control(torch.tensor([[x_1/1000 , x_2/1000]], dtype = torch.float)).detach()
-    #rescaling the images:
-
-    val_max = max(np.amax(val_img), np.amax(op_val_img))
-    val_min = min(np.amin(val_img), np.amin(op_val_img))
-    con_max = max(np.amax(con_img), np.amax(op_con_img))
-    con_min = min(np.amin(con_img), np.amin(op_con_img))
-    
-    print(np.amin(op_con_img))
-    print('con max, con min', con_max, con_min)
-
-    print("control at zero:",new_control(torch.tensor([[0,0]], dtype= torch.float)))
-    print("control at 1,1:",new_control(torch.tensor([[0.1,0.1]], dtype= torch.float)))
-
-    
-
-    print(con_img[0], 'con img')
-    print(op_con_img[0], 'op con img')
-    print('-----------------------')
-
-    val_img = (val_img-val_min)/(val_max - val_min)
-    con_img = (con_img-con_min)/(con_max - con_min)
-    op_val_img = (op_val_img-val_min)/(val_max-val_min)
-    op_con_img = (op_con_img-con_min)/(con_max-con_min)
-    
-    Writer.add_image('optimal value', op_val_img , 0)
-    Writer.add_image('optimal control function', op_con_img , 0)
-    Writer.add_image('value_function', val_img , 0)
-    Writer.add_image('control_function', con_img , 0)
-    Writer.close()
-    print(con_img[0], 'con img')
-    print(op_con_img[0], 'op con img')
-    
-    print('-----------------------')
-    print(val_img[0], 'val img')
-    print(op_val_img[0], 'op val img')
-    
+    #Presenting results
+    present_results(value_function, new_control)
+        
     print('done')
     
