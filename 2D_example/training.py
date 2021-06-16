@@ -39,7 +39,7 @@ class error():
         
         return overall_loss
 
-    def policy_improvement(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5):
+    def policy_improvement(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5, noise_factor = 0):
         traj = torch.squeeze(trajectory, 0)
         
         old_controls = old_control(traj).detach()
@@ -58,7 +58,7 @@ class error():
             pass
             #pdb.set_trace()
         #overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
-        overall_loss = (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)*(0.0+2**np.random.rand(1)) + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
+        overall_loss = (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)*(1+ noise_factor*np.random.rand(1)) + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
         #overall_loss = (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)*2+ (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
 
         #print((value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()-0.5* traj[0][0][0]**2 - traj[0][0][1]**2 + 0.5* traj[-1][0][0]**2 + traj[-1][0][1]**2))
@@ -217,7 +217,7 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1)
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor = 0.01)
                 #assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
@@ -236,7 +236,7 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0.5)
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
                 #assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
@@ -257,7 +257,7 @@ if __name__ == '__main__':
         for j, (x, u) in enumerate(test_loader):
             value_error= error.value_iteration(x, u, old_control, new_control, value_function, on_optimum = True)
             
-            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1)
+            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor=0)
             Writer.add_scalars('errors', {'test policy error': policy_error,'test value_error':value_error, 'relative test value error': value_error/(optimal_value_function(x[0,0]))},(j + len(test_loader)*epoch)*dataset_stretch_factor )
  
         value_scheduler.step()
