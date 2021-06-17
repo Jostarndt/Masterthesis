@@ -16,7 +16,7 @@ class error():
         self.Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
         self.R = torch.tensor([[1]], dtype = torch.float)
 
-    def value_iteration(self,trajectory, control, old_control, new_control, value_function, on_optimum):
+    def value_iteration_left(self,trajectory, control, old_control, new_control, value_function, on_optimum):
         traj = torch.squeeze(trajectory, 0)
 
         old_controls = old_control(traj).detach()
@@ -34,10 +34,36 @@ class error():
             overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1]) #TODO make sure this is correct
         elif on_optimum == False:
             overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]).detach())) + control_loss 
+            #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))) + control_loss 
 
         overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
         
         return overall_loss
+    
+    def value_iteration_right(self,trajectory, control, old_control, new_control, value_function, on_optimum):
+        traj = torch.squeeze(trajectory, 0)
+
+        old_controls = old_control(traj).detach()
+        new_controls= new_control(traj).detach()
+        diff = torch.squeeze(old_controls - control, 0)
+        oc = torch.squeeze(old_controls, 0)
+
+        points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
+        points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
+        points_together = 2*points_b - points_a
+
+        control_loss =0.05* torch.mean(points_together)
+        
+        if on_optimum == True:
+            overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1]) #TODO make sure this is correct
+        elif on_optimum == False:
+            overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))) + control_loss 
+            #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))) + control_loss 
+
+        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
+        
+        return overall_loss
+
 
     def policy_improvement(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5, noise_factor = 0):
         traj = torch.squeeze(trajectory, 0)
@@ -56,11 +82,10 @@ class error():
         #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
         overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
         
+        #print('is this always positive? ',(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach())  - (0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2))
         #overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
         #overall_loss = (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)*(1+ noise_factor*np.random.rand(1)) + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
         
-        #overall_loss = (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)*2+ (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
-
         #print((value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()-0.5* traj[0][0][0]**2 - traj[0][0][1]**2 + 0.5* traj[-1][0][0]**2 + traj[-1][0][1]**2))
 
         '''
@@ -187,21 +212,30 @@ if __name__ == '__main__':
     present_results(value_function, new_control, 'after_warmup')
 
     #Training and Testing
-    for epoch in range(10):
+    for epoch in range(30):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
         new_control.train()
         for j,(x, u) in enumerate(train_loader):
             #-------------Value iteration------------
-            if epoch < 10:
+            if True:#epoch < 10:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                value_error= error.value_iteration(x, u, old_control, new_control, value_function, on_optimum = True)
+                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
                 assert value_error !=  0
                 value_error.backward()
                 value_optimizer.step()
+
+                control_optimizer.zero_grad()
+                value_optimizer.zero_grad()
+
+                value_error= error.value_iteration_right(x, u, old_control, new_control, value_function, on_optimum =False)
+                assert value_error !=  0
+                value_error.backward()
+                value_optimizer.step()
+
 
             if j == 0:
                 present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
@@ -226,7 +260,7 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 1)
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 4)
                 #assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
@@ -243,7 +277,7 @@ if __name__ == '__main__':
         value_function.eval()
         new_control.eval()
         for j, (x, u) in enumerate(test_loader):
-            value_error= error.value_iteration(x, u, old_control, new_control, value_function, on_optimum = True)
+            value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum = True)
             
             policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor=0)
             Writer.add_scalars('errors', {'test policy error': policy_error,'test value_error':value_error, 'relative test value error': value_error/(optimal_value_function(x[0,0]))},(j + len(test_loader)*epoch)*dataset_stretch_factor )
