@@ -28,7 +28,7 @@ class error():
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
         points_together = 2*points_b - points_a
 
-        control_loss =0.05* torch.mean(points_together)
+        control_loss =0.2* torch.mean(points_together)
         
         if on_optimum == True:
             overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1]) #TODO make sure this is correct
@@ -52,7 +52,7 @@ class error():
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
         points_together = 2*points_b - points_a
 
-        control_loss =0.05* torch.mean(points_together)
+        control_loss =0.2* torch.mean(points_together)
         
         if on_optimum == True:
             overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - 0.5*torch.square(trajectory[0][0][0][0])- torch.square(trajectory[0][0][0][1]) #TODO make sure this is correct
@@ -76,7 +76,7 @@ class error():
         points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(1,2)))
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff.transpose(1,2)))
         points_together = 2*points_b - points_a
-        control_loss =0.05* torch.mean(points_together)#TODO this is anyways always positive?
+        control_loss =0.2* torch.mean(points_together)#TODO this is anyways always positive?
         #this is either on optimum or on the given value_function
         #overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
         #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
@@ -97,7 +97,7 @@ class error():
             compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
         '''
         #new_control.zero_grad()
-        #overall_loss = 0.05*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
+        #overall_loss = 0.2*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
         #overall_loss = torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
         #overall_loss =torch.mean(torch.abs(new_control(traj)+torch.ones(6).unsqueeze(1).unsqueeze(1))) 
         
@@ -108,12 +108,11 @@ class error():
         traj = torch.squeeze(trajectory, 0)
         
         new_control.zero_grad()
-        overall_loss = 0.05*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
+        overall_loss = 0.2*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
         return overall_loss
 
 def optimal_value_function(traj):
-    #TODO disturbations seem to bring huge instability
-    return (0.5* traj[0,0]**2 + traj[0,1]**2)*1
+    return (0.5* traj[0,0]**2 + traj[0,1]**2)
 
 def present_results(value_function, new_control, stepname= "after_training"):
     int_const = value_function(torch.tensor([[0,0]], dtype= torch.float)).detach()
@@ -197,7 +196,7 @@ if __name__ == '__main__':
     value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
 
     #Warmup
-    for epoch in range(3):
+    for epoch in range(2):
         print("warmup: ", epoch)
         old_control.train()
         value_function.train()
@@ -223,7 +222,7 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
+                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =True)
                 assert value_error !=  0
                 value_error.backward()
                 value_optimizer.step()
@@ -231,7 +230,7 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                value_error= error.value_iteration_right(x, u, old_control, new_control, value_function, on_optimum =False)
+                value_error= error.value_iteration_right(x, u, old_control, new_control, value_function, on_optimum =True)
                 assert value_error !=  0
                 value_error.backward()
                 value_optimizer.step()

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+import pdb
 import dgl
 
 
@@ -46,6 +46,7 @@ class critic(nn.Module):
             self.fc2.weight =  torch.nn.parameter.Parameter(torch.abs(self.fc2.weight))
             self.fc1.bias =  torch.nn.parameter.Parameter(torch.abs(self.fc1.bias))
             self.fc2.bias =  torch.nn.parameter.Parameter(torch.abs(self.fc2.bias))
+
         '''
         if positive:
             pass
@@ -54,10 +55,24 @@ class critic(nn.Module):
             self.fc1.bias =  torch.nn.parameter.Parameter(torch.zeros(self.fc1.bias.shape))
             self.fc2.bias =  torch.nn.parameter.Parameter(torch.zeros(self.fc2.bias.shape))
         '''
+
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return torch.abs(x)
+
+class critic_pol(nn.Module):
+    def __init__(self, space_dim=1, positive = False):
+        super(critic, self).__init__()
+        self.bias_weights = torch.nn.parameter.Parameter(torch.randn(1))
+        self.linear_weights= torch.nn.parameter.Parameter(torch.randn(space_dim))
+        self.square_weights = torch.nn.parameter.Parameter(torch.randn(space_dim, space_dim))
+        
+    def forward(self, x):
+        x_square = torch.matmul(x.transpose(0,1), x)
+        output = torch.sum(torch.matmul(x_square, self.square_weights)) + torch.matmul(x, self.linear_weights)
+        return output
+
 
 if __name__ == '__main__':
     critic = critic(space_dim)
