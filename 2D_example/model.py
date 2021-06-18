@@ -33,7 +33,7 @@ class actor(nn.Module):
         x = F.relu(self.fc2(x))
         return self.fc3(x)
 
-class critic(nn.Module):
+class critic_nn(nn.Module):
     def __init__(self, space_dim=1, positive = False):
         super(critic, self).__init__()
         self.s_dim = space_dim
@@ -61,7 +61,7 @@ class critic(nn.Module):
         x = self.fc2(x)
         return torch.abs(x)
 
-class critic_pol(nn.Module):
+class critic(nn.Module):
     def __init__(self, space_dim=1, positive = False):
         super(critic, self).__init__()
         self.bias_weights = torch.nn.parameter.Parameter(torch.randn(1))

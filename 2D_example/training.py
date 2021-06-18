@@ -196,7 +196,7 @@ if __name__ == '__main__':
     value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
 
     #Warmup
-    for epoch in range(2):
+    for epoch in range(1):
         print("warmup: ", epoch)
         old_control.train()
         value_function.train()
@@ -211,7 +211,7 @@ if __name__ == '__main__':
     present_results(value_function, new_control, 'after_warmup')
 
     #Training and Testing
-    for epoch in range(30):
+    for epoch in range(10):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
@@ -237,10 +237,11 @@ if __name__ == '__main__':
 
 
             if j == 0:
-                present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
+                pass
+                #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
 
             #--------policy improvement------------
-            if epoch < 5: #or epoch >= 6:
+            if False:#epoch < 5: #or epoch >= 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
@@ -255,7 +256,7 @@ if __name__ == '__main__':
                     old_control = deepcopy(new_control)
             
 
-            if epoch >= 5:# and epoch < 6:
+            if False:#epoch >= 5:# and epoch < 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
@@ -285,6 +286,8 @@ if __name__ == '__main__':
     
     #Presenting results
     present_results(value_function, new_control)
+    print('parameters of value function', value_function.parameters())
+    for name, param in value_function.named_parameters():
+        print(name, param.data)
         
     print('done')
-    
