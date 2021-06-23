@@ -10,6 +10,11 @@ from torch.utils.data import DataLoader
 import pdb
 
 
+
+batchsize = 2
+
+
+
 class error():
     def __init__(self):
         self.costs = dgl.cost_functional()
@@ -60,7 +65,7 @@ class error():
 
         overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
         
-        overall_loss = torch.mean(overall_loss)
+        #overall_loss = torch.mean(overall_loss)
         return overall_loss
 
 
@@ -142,8 +147,9 @@ def present_results(value_function, new_control, stepname= "after_training"):
     print('-----------------------')
 
     val_img = (val_img-val_min)/(val_max - val_min)
-    con_img = (con_img-con_min)/(con_max - con_min)
     op_val_img = (op_val_img-val_min)/(val_max-val_min)
+
+    con_img = (con_img-con_min)/(con_max - con_min)
     op_con_img = (op_con_img-con_min)/(con_max-con_min)
     
     Writer.add_image('optimal value/'+stepname, op_val_img , 0)
@@ -164,13 +170,13 @@ if __name__ == '__main__':
     error = error()
     dataset = dgl.Dataset()
     trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=100)
-    train_loader = DataLoader(dataset = trainset, batch_size = 1, shuffle =True)
+    train_loader = DataLoader(dataset = trainset, batch_size = batchsize, shuffle =True)
 
     
     testset = dataset.create_dataset_different_control_and_starts(amount_startpoints=10)
     test_loader = DataLoader(dataset = testset, batch_size = 1, shuffle =True)
     
-    dataset_stretch_factor = len(train_loader)/len(test_loader)
+    dataset_stretch_factor =  len(train_loader)/len(test_loader)
 
     ''' 
         ##########
@@ -189,7 +195,7 @@ if __name__ == '__main__':
     costs = dgl.cost_functional()
 
     control_optimizer = optim.SGD(new_control.parameters(), lr=0.005) #i am unsure about this
-    value_optimizer = optim.SGD(value_function.parameters(), lr=0.5)#0.05
+    value_optimizer = optim.SGD(value_function.parameters(), lr=10)#0.05
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
@@ -216,7 +222,7 @@ if __name__ == '__main__':
     present_results(value_function, new_control, 'after_warmup')
 
     #Training and Testing
-    for epoch in range(10):
+    for epoch in range(40):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
@@ -226,11 +232,11 @@ if __name__ == '__main__':
             if True:#epoch < 10:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
-                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
+                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =True)
                 assert value_error !=  0
                 value_error.backward()
                 value_optimizer.step()
-
+                '''
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
@@ -238,14 +244,14 @@ if __name__ == '__main__':
                 assert value_error !=  0
                 value_error.backward()
                 value_optimizer.step()
-
+                '''
 
             if j == 0:
                 pass
                 #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
 
             #--------policy improvement------------
-            if False:#epoch < 5: #or epoch >= 6:
+            if epoch < 5: #or epoch >= 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
@@ -254,26 +260,24 @@ if __name__ == '__main__':
                 policy_error.backward()
                 control_optimizer.step()
 
-                if (j + len(train_loader)*epoch) %100 == 0:
-                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error, 'relative train value error': value_error/(optimal_value_function(x[0,0]))},j + len(train_loader)*epoch)
+                if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
+                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
                     #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
                     old_control = deepcopy(new_control)
             
 
-            if False:#epoch >= 5:# and epoch < 6:
+            if epoch >= 5:# and epoch < 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 4)
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
                 #assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
 
-                if (j + len(train_loader)*epoch) %100 == 0:
-                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error, 'relative train value error': value_error/(optimal_value_function(x[0,0]))}, j + len(train_loader)*epoch)
-                    #print(optimal_value_function(x[0][0])-value_function(x[0][0]) + value_function(torch.tensor([[0,0]], dtype = torch.float)), 'difference a')
-                    #print(optimal_value_function(x[0][-1])-value_function(x[0][-1])+ value_function(torch.tensor([[0,0]], dtype = torch.float)), 'difference b')
-                    old_control = deepcopy(new_control)
+                if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
+                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error}, j + len(train_loader)*epoch)
+                    old_control = deepcopy(new_control)#compare with clone
 
 
         '''TESTING'''
@@ -284,7 +288,7 @@ if __name__ == '__main__':
             value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum = True)
             
             policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor=0)
-            Writer.add_scalars('errors', {'test policy error': policy_error,'test value_error':value_error, 'relative test value error': value_error/(optimal_value_function(x[0,0]))},(j + len(test_loader)*epoch)*dataset_stretch_factor )
+            Writer.add_scalars('errors', {'test policy error': policy_error,'test value_error':value_error},(j + len(test_loader)*epoch)*dataset_stretch_factor )
  
         value_scheduler.step()
     
