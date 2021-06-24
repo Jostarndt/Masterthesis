@@ -16,6 +16,26 @@ batch_size = 2
 class actor(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
         super(actor, self).__init__()
+        #self.prod_weight = torch.nn.parameter.Parameter(torch.randn(1))
+        self.prod_weight = torch.nn.parameter.Parameter(torch.tensor([-1.]))
+        #self.square_left = torch.nn.parameter.Parameter(torch.randn(2))
+        #self.square_left = torch.nn.parameter.Parameter(torch.tensor([0.,-1]))
+        self.square_left = torch.tensor([0.,1])
+        #self.square_right = torch.nn.parameter.Parameter(torch.randn(2))
+        #self.square_right = torch.nn.parameter.Parameter(torch.tensor([0.,0.]))
+        self.square_right = torch.tensor([1.,0.])
+    def forward(self, x):
+        #pdb.set_trace()
+        output =torch.matmul(torch.matmul(self.square_left, torch.matmul(x.transpose(-2,-1), x)), self.square_right)
+        
+        #pdb.set_trace()
+        output = self.prod_weight * output
+        #output = x[:,0] * x[:,1] * self.prod_weight
+        return output
+
+class actor_nn(nn.Module):
+    def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
+        super(actor, self).__init__()
         self.fc1 = nn.Linear(space_dim, 50*space_dim)
         self.fc2 = nn.Linear(50*space_dim, 50*space_dim)
         self.fc3 = nn.Linear(50*space_dim, control_dim)
@@ -64,8 +84,8 @@ class critic_nn(nn.Module):
 class critic(nn.Module):
     def __init__(self, space_dim=1, positive = False):
         super(critic, self).__init__()
-        self.bias_weights = torch.nn.parameter.Parameter(torch.randn(1))
-        self.linear_weights= torch.nn.parameter.Parameter(torch.randn(space_dim))
+        #self.bias_weights = torch.nn.parameter.Parameter(torch.randn(1))
+        #self.linear_weights= torch.nn.parameter.Parameter(torch.randn(space_dim))
         self.square_weights = torch.nn.parameter.Parameter(torch.randn(space_dim))
         #self.square_weights = torch.nn.parameter.Parameter(torch.tensor([0.5, 1]))
         

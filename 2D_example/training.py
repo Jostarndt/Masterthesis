@@ -11,7 +11,7 @@ import pdb
 
 
 
-batchsize = 2
+batchsize = 8
 
 
 
@@ -23,9 +23,8 @@ class error():
 
     def value_iteration_left(self,trajectory, control, old_control, new_control, value_function, on_optimum):
         traj = torch.squeeze(trajectory, 0)
-
-        old_controls = old_control(traj).detach()
-        new_controls= new_control(traj).detach()
+        old_controls = old_control(traj).detach().reshape_as(control)
+        new_controls= new_control(traj).detach().reshape_as(control)
         diff = torch.squeeze(old_controls - control, 0)
         oc = torch.squeeze(old_controls, 0)
         points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(-1,-2)))
@@ -72,8 +71,8 @@ class error():
     def policy_improvement(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5, noise_factor = 0):
         traj = torch.squeeze(trajectory, 0)
         
-        old_controls = old_control(traj).detach()
-        new_controls= new_control(traj)
+        old_controls = old_control(traj).detach().reshape_as(control)
+        new_controls= new_control(traj).reshape_as(control)
         diff = torch.squeeze(old_controls - control, 0)
         oc= torch.squeeze(old_controls, 0)
 
@@ -105,7 +104,7 @@ class error():
         #overall_loss = torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
         #overall_loss =torch.mean(torch.abs(new_control(traj)+torch.ones(6).unsqueeze(1).unsqueeze(1))) 
         
-        overall_loss = torch.abs(overall_loss)#TODO: square instead?
+        overall_loss = torch.square(overall_loss)#TODO: square instead?
 
         overall_loss = torch.mean(overall_loss)
         return overall_loss
@@ -194,12 +193,12 @@ if __name__ == '__main__':
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=0.005) #i am unsure about this
+    control_optimizer = optim.SGD(new_control.parameters(), lr=5) #0.005
     value_optimizer = optim.SGD(value_function.parameters(), lr=10)#0.05
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
-    lmbda = lambda epoch :1# 0.996
+    lmbda = lambda epoch : 1 if epoch < 190 else 0.99# 0.996
     value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
     
 
@@ -208,6 +207,7 @@ if __name__ == '__main__':
  
     #Warmup
     for epoch in range(0):
+        pass
         print("warmup: ", epoch)
         old_control.train()
         value_function.train()
@@ -219,10 +219,11 @@ if __name__ == '__main__':
             #assert policy_error !=  0
             policy_error.backward()
             control_optimizer.step()
-    present_results(value_function, new_control, 'after_warmup')
+    
+    #present_results(value_function, new_control, 'after_warmup')
 
     #Training and Testing
-    for epoch in range(40):
+    for epoch in range(300):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
@@ -247,7 +248,14 @@ if __name__ == '__main__':
                 '''
 
             if j == 0:
-                pass
+                print("epoch: ", epoch)
+                print('parameters of value function', value_function.parameters())
+                for name, param in value_function.named_parameters():
+                    print(name, param.data)
+                print('parameters of control function', new_control.parameters())
+                for name, param in new_control.named_parameters():
+                    print(name, param.data)
+                #pass
                 #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
 
             #--------policy improvement------------
@@ -256,7 +264,7 @@ if __name__ == '__main__':
                 value_optimizer.zero_grad()
 
                 policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor = 0)
-                #assert policy_error !=  0
+                assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
 
@@ -270,8 +278,8 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
-                #assert policy_error !=  0
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor = 0)
+                assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
 
