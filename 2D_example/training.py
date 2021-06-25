@@ -67,7 +67,6 @@ class error():
         #overall_loss = torch.mean(overall_loss)
         return overall_loss
 
-
     def policy_improvement(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5, noise_factor = 0):
         traj = torch.squeeze(trajectory, 0)
         
@@ -83,7 +82,7 @@ class error():
         #this is either on optimum or on the given value_function
         #overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
         #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
-        overall_loss = (1-op_factor)*(value_function(trajectory[:,0]).detach() - value_function(trajectory[:,-1]).detach()).squeeze() + (op_factor)*(0.5* trajectory[:,0,0,0]**2 + trajectory[:,0,0,1]**2 - 0.5* trajectory[:,-1,0,0]**2 - trajectory[:,-1,0,1]**2)  + control_loss
+        overall_loss = (1-op_factor)*(value_function(trajectory[:,0]).detach() - value_function(trajectory[:,-1]).detach()).reshape_as(control_loss) + (op_factor)*(0.5* trajectory[:,0,0,0]**2 + trajectory[:,0,0,1]**2 - 0.5* trajectory[:,-1,0,0]**2 - trajectory[:,-1,0,1]**2).reshape_as(control_loss)  + control_loss
         
         #print('is this always positive? ',(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach())  - (0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2))
         #overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
@@ -193,7 +192,7 @@ if __name__ == '__main__':
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=5) #0.005
+    control_optimizer = optim.SGD(new_control.parameters(), lr=5000) #0.005
     value_optimizer = optim.SGD(value_function.parameters(), lr=10)#0.05
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
@@ -220,10 +219,10 @@ if __name__ == '__main__':
             policy_error.backward()
             control_optimizer.step()
     
-    #present_results(value_function, new_control, 'after_warmup')
+    present_results(value_function, new_control, 'after_warmup')
 
     #Training and Testing
-    for epoch in range(300):
+    for epoch in range(200):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
@@ -259,10 +258,10 @@ if __name__ == '__main__':
                 #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
 
             #--------policy improvement------------
-            if epoch < 5: #or epoch >= 6:
+            if True:#epoch < 5: #or epoch >= 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
-
+                #pdb.set_trace()
                 policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor = 0)
                 assert policy_error !=  0
                 policy_error.backward()
@@ -272,9 +271,8 @@ if __name__ == '__main__':
                     Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
                     #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
                     old_control = deepcopy(new_control)
-            
 
-            if epoch >= 5:# and epoch < 6:
+            if False:# epoch >= 5:# and epoch < 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
 

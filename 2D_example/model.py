@@ -17,7 +17,7 @@ class actor(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
         super(actor, self).__init__()
         #self.prod_weight = torch.nn.parameter.Parameter(torch.randn(1))
-        self.prod_weight = torch.nn.parameter.Parameter(torch.tensor([-1.]))
+        self.prod_weight = torch.nn.parameter.Parameter(torch.tensor([-0.9]))
         #self.square_left = torch.nn.parameter.Parameter(torch.randn(2))
         #self.square_left = torch.nn.parameter.Parameter(torch.tensor([0.,-1]))
         self.square_left = torch.tensor([0.,1])
@@ -28,7 +28,6 @@ class actor(nn.Module):
         #pdb.set_trace()
         output =torch.matmul(torch.matmul(self.square_left, torch.matmul(x.transpose(-2,-1), x)), self.square_right)
         
-        #pdb.set_trace()
         output = self.prod_weight * output
         #output = x[:,0] * x[:,1] * self.prod_weight
         return output
