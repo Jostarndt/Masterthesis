@@ -192,12 +192,12 @@ if __name__ == '__main__':
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=5000) #0.005
+    control_optimizer = optim.SGD(new_control.parameters(), lr=50000) #0.005
     value_optimizer = optim.SGD(value_function.parameters(), lr=10)#0.05
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
-    lmbda = lambda epoch : 1 if epoch < 190 else 0.99# 0.996
+    lmbda = lambda epoch : 1 if epoch < 500 else 0.99# 0.996
     value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
     
 
@@ -222,7 +222,7 @@ if __name__ == '__main__':
     present_results(value_function, new_control, 'after_warmup')
 
     #Training and Testing
-    for epoch in range(200):
+    for epoch in range(700):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
@@ -232,7 +232,7 @@ if __name__ == '__main__':
             if True:#epoch < 10:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
-                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =True)
+                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
                 assert value_error !=  0
                 value_error.backward()
                 value_optimizer.step()
@@ -262,7 +262,7 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 #pdb.set_trace()
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor = 0)
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
                 assert policy_error !=  0
                 policy_error.backward()
                 control_optimizer.step()
