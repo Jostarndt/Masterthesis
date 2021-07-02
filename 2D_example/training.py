@@ -11,7 +11,7 @@ import pdb
 
 
 
-batchsize = 8
+batchsize = 800
 
 
 
@@ -38,7 +38,7 @@ class error():
             overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[:,-1]).detach())) + torch.squeeze(control_loss)
             #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))) + control_loss 
 
-        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
+        #overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
         
         overall_loss = torch.mean(overall_loss)
         return overall_loss
@@ -84,11 +84,6 @@ class error():
         #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
         overall_loss = (1-op_factor)*(value_function(trajectory[:,0]).detach() - value_function(trajectory[:,-1]).detach()).reshape_as(control_loss) + (op_factor)*(0.5* trajectory[:,0,0,0]**2 + trajectory[:,0,0,1]**2 - 0.5* trajectory[:,-1,0,0]**2 - trajectory[:,-1,0,1]**2).reshape_as(control_loss)  + control_loss
         
-        #print('is this always positive? ',(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach())  - (0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2))
-        #overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
-        #overall_loss = (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)*(1+ noise_factor*np.random.rand(1)) + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
-        
-        #print((value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()-0.5* traj[0][0][0]**2 - traj[0][0][1]**2 + 0.5* traj[-1][0][0]**2 + traj[-1][0][1]**2))
 
         '''
             compare_diff = torch.squeeze(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2)- torch.squeeze(control, 1), 0)
@@ -103,7 +98,7 @@ class error():
         #overall_loss = torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
         #overall_loss =torch.mean(torch.abs(new_control(traj)+torch.ones(6).unsqueeze(1).unsqueeze(1))) 
         
-        overall_loss = torch.square(overall_loss)#TODO: square instead?
+        #overall_loss = torch.square(overall_loss)#TODO: square instead?
 
         overall_loss = torch.mean(overall_loss)
         return overall_loss
@@ -192,8 +187,11 @@ if __name__ == '__main__':
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=50000) #0.005
-    value_optimizer = optim.SGD(value_function.parameters(), lr=10)#0.05
+    #control_optimizer = optim.SGD(new_control.parameters(), lr=50000) #0.005
+    #value_optimizer = optim.SGD(value_function.parameters(), lr=500)#0.05
+    control_optimizer = optim.LBFGS(new_control.parameters()) #0.005
+    value_optimizer = optim.LBFGS(value_function.parameters())
+
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
@@ -222,20 +220,27 @@ if __name__ == '__main__':
     present_results(value_function, new_control, 'after_warmup')
 
     #Training and Testing
-    for epoch in range(700):
+    for epoch in range(70):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
         new_control.train()
         for j,(x, u) in enumerate(train_loader):
             #-------------Value iteration------------
+            #value_error = 1
             if True:#epoch < 10:
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
-                assert value_error !=  0
-                value_error.backward()
-                value_optimizer.step()
+            #while value_error > 10**-10:#not sure if good enough?
+                def closure():
+                    control_optimizer.zero_grad()
+                    value_optimizer.zero_grad()
+                    value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
+                    #assert value_error !=  0
+                    value_error.backward()
+                    print(value_error)
+                    return value_error
+                value_optimizer.step(closure)
+                #print('value ', value_error)
+
                 '''
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
@@ -258,19 +263,27 @@ if __name__ == '__main__':
                 #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
 
             #--------policy improvement------------
+            
             if True:#epoch < 5: #or epoch >= 6:
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-                #pdb.set_trace()
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
-                assert policy_error !=  0
-                policy_error.backward()
-                control_optimizer.step()
+            #policy_error = 1
+            #while policy_error > 10**-11:
+                def closure_two():
+                    control_optimizer.zero_grad()
+                    value_optimizer.zero_grad()
+                    policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
+                    assert policy_error !=  0
+                    policy_error.backward()
+                    print(policy_error)
+                    return policy_error
+                control_optimizer.step(closure_two)
+                #print('policy: ',policy_error)
 
-                if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
-                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
+                if (j + len(train_loader)*epoch) %(50//batchsize + 1) == 0:
+                    #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
+                    #Writer.add_scalars('errors', {'train_policy_error': policy_error},j + len(train_loader)*epoch)
                     #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
                     old_control = deepcopy(new_control)
+
 
             if False:# epoch >= 5:# and epoch < 6:
                 control_optimizer.zero_grad()
