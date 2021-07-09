@@ -204,47 +204,38 @@ if __name__ == '__main__':
     for name, param in value_function.named_parameters():
         print(name, param.data)
  
-    #Warmup
-    for epoch in range(0):
-        pass
-        print("warmup: ", epoch)
-        old_control.train()
-        value_function.train()
-        new_control.train()
-        for j,(x, u) in enumerate(train_loader):
-            control_optimizer.zero_grad()
-            value_optimizer.zero_grad()
-            policy_error = error.policy_warmup(x, u, old_control, new_control, value_function, op_factor = 1)
-            #assert policy_error !=  0
-            policy_error.backward()
-            control_optimizer.step()
-    
-    present_results(value_function, new_control, 'after_warmup')
+    present_results(value_function, new_control, 'pretraining')
 
     #Training and Testing
-    for epoch in range(700):
+    for epoch in range(100):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
         new_control.train()
         for j,(x, u) in enumerate(train_loader):
             #-------------Value iteration------------
-            if True:#epoch < 10:
+            for i in range(50):#epoch < 10:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
                 assert value_error !=  0
                 value_error.backward()
                 value_optimizer.step()
-                '''
+
+            #--------policy improvement------------
+            for i in range(50):#epoch < 5: #or epoch >= 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
+                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
+                assert policy_error !=  0
+                policy_error.backward()
+                control_optimizer.step()
 
-                value_error= error.value_iteration_right(x, u, old_control, new_control, value_function, on_optimum =True)
-                assert value_error !=  0
-                value_error.backward()
-                value_optimizer.step()
-                '''
+            if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
+                Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
+                #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
+                old_control = deepcopy(new_control)
+            
 
             if j == 0:
                 print("epoch: ", epoch)
@@ -257,33 +248,6 @@ if __name__ == '__main__':
                 #pass
                 #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
 
-            #--------policy improvement------------
-            if True:#epoch < 5: #or epoch >= 6:
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-                #pdb.set_trace()
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
-                assert policy_error !=  0
-                policy_error.backward()
-                control_optimizer.step()
-
-                if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
-                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
-                    #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
-                    old_control = deepcopy(new_control)
-
-            if False:# epoch >= 5:# and epoch < 6:
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor = 0)
-                assert policy_error !=  0
-                policy_error.backward()
-                control_optimizer.step()
-
-                if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
-                    Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error}, j + len(train_loader)*epoch)
-                    old_control = deepcopy(new_control)#compare with clone
 
 
         '''TESTING'''
