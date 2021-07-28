@@ -21,6 +21,21 @@ class error():
         self.Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
         self.R = torch.tensor([[1]], dtype = torch.float)
 
+    def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v, theta_u_old, theta_v_old):
+        #new_control: model that delivers a vector of monomials
+        #old_control: exactly the same as new_control -> not needed at all! TODO remove
+        #value_function: also list of monomials - in the paper ist theta_v
+        #TODO assert dimensionality of theta and monomial basis
+        control_monomials = old_control(trajectory)#TODO should have same shape as control!
+        
+        rho_q = torch.matmul(self.Q, trajectory.transpose(-1,-2)).sum()#TODO on which axis? output should be [batchsize x 1]
+        rho_delta_phi = (torch.matmul(value_function(trajectory[:,0]), theta_v) - torch.matmul(value_function(trajectory[:,-1]))).sum()#TODO which axis?
+        rho_psi = 
+        
+        new_control_vector = 
+        return theta_u, theta_v
+        pass
+    
     def value_iteration_left(self,trajectory, control, old_control, new_control, value_function, on_optimum):
         traj = torch.squeeze(trajectory, 0)
         old_controls = old_control(traj).detach().reshape_as(control)
