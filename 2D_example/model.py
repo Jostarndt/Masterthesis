@@ -32,6 +32,17 @@ class actor(nn.Module):
         #output = x[:,0] * x[:,1] * self.prod_weight
         return output
 
+class polynomial_linear_actor(nn.Module):
+    def __init__(self):
+        super(polynomial_linear_actor, self).__init__()
+    def forward(self, x):
+        square = torch.square(x) #(x,y) -> (x^2, y^2)
+        prod = torch.prod(x, 3).unsqueeze(3) #(x, y) -> x*y
+        const = torch.ones_like(prod) #-> c
+        output = torch.cat((square,prod, const), 3)
+        return output
+
+
 class actor_nn(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
         super(actor, self).__init__()
@@ -51,6 +62,29 @@ class actor_nn(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         return self.fc3(x)
+
+
+
+
+
+
+
+
+
+#---------------------Critics------------------------------
+class polynomial_linear_critic(nn.Module):
+    def __init__(self):
+        print('correct function')
+        super(polynomial_linear_critic, self).__init__()
+    def forward(self, x):
+        square = torch.square(x)
+        prod = torch.prod(x,2).unsqueeze(2)
+        const = torch.ones_like(prod)
+
+        output = torch.cat((square, prod, const), 2)
+        return output
+
+
 
 class critic_nn(nn.Module):
     def __init__(self, space_dim=1, positive = False):

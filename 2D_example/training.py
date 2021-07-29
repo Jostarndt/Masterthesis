@@ -21,20 +21,27 @@ class error():
         self.Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
         self.R = torch.tensor([[1]], dtype = torch.float)
 
-    def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v, theta_u_old, theta_v_old):
+    def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v):
         #new_control: model that delivers a vector of monomials
         #old_control: exactly the same as new_control -> not needed at all! TODO remove
         #value_function: also list of monomials - in the paper ist theta_v
         #TODO assert dimensionality of theta and monomial basis
-        control_monomials = old_control(trajectory)#TODO should have same shape as control!
+        control_monomials = old_control(trajectory)#TODO should have same shape as control! -> this is going to be difficult?
+        rho_q = torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).sum((1,2,3))
+
+        #print(control.size())
+        #print(torch.matmul(value_function(trajectory[:,0]), theta_v))
+        rho_delta_phi = (torch.matmul(value_function(trajectory[:,0]), theta_v) - torch.matmul(value_function(trajectory[:,-1]), theta_v)).sum()#TODO which axis?
         
-        rho_q = torch.matmul(self.Q, trajectory.transpose(-1,-2)).sum()#TODO on which axis? output should be [batchsize x 1]
-        rho_delta_phi = (torch.matmul(value_function(trajectory[:,0]), theta_v) - torch.matmul(value_function(trajectory[:,-1]))).sum()#TODO which axis?
-        rho_psi = 
+        control_approx = torch.matmul(control_monomials, theta_u)
+        pdb.set_trace()
+        rho_psi = torch.matmul(torch.matmul(control_approx, self.R), control_approx).sum()
+
         
-        new_control_vector = 
-        return theta_u, theta_v
-        pass
+        pi = rho_q + rho_psi
+        
+        residual = pi
+        return residual, theta_u, theta_v
     
     def value_iteration_left(self,trajectory, control, old_control, new_control, value_function, on_optimum):
         traj = torch.squeeze(trajectory, 0)
@@ -202,67 +209,29 @@ if __name__ == '__main__':
     '''
 
     print("##################################")
-    old_control = model.actor(stabilizing = False, control_dim = 1, space_dim = 2)
-    new_control = model.actor(stabilizing = False, control_dim = 1, space_dim = 2)
-    value_function = model.critic(positive = True, space_dim = 2)
+    
+    control_function = model.polynomial_linear_actor()
+    value_function = model.polynomial_linear_critic()
+    theta_u = torch.ones(4)
+    theta_v = torch.ones(4)
+
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=50000) #0.005
-    value_optimizer = optim.SGD(value_function.parameters(), lr=10)#0.05
-    #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
-    #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
-    lmbda = lambda epoch : 1 if epoch < 500 else 0.99# 0.996
-    value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
-    
-
-    for name, param in value_function.named_parameters():
-        print(name, param.data)
- 
-    present_results(value_function, new_control, 'pretraining')
+    #present results!
 
     #Training and Testing
     for epoch in range(100):
         print("epoch: ", epoch)
-        old_control.train()
-        value_function.train()
-        new_control.train()
         for j,(x, u) in enumerate(train_loader):
-            #-------------Value iteration------------
-            for i in range(50):#epoch < 10:
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-                value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
-                assert value_error !=  0
-                value_error.backward()
-                value_optimizer.step()
 
-            #--------policy improvement------------
-            for i in range(50):#epoch < 5: #or epoch >= 6:
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-                policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
-                assert policy_error !=  0
-                policy_error.backward()
-                control_optimizer.step()
+            residual = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
+
 
             if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
                 Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
                 #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
                 old_control = deepcopy(new_control)
-            
-
-            if j == 0:
-                print("epoch: ", epoch)
-                print('parameters of value function', value_function.parameters())
-                for name, param in value_function.named_parameters():
-                    print(name, param.data)
-                print('parameters of control function', new_control.parameters())
-                for name, param in new_control.named_parameters():
-                    print(name, param.data)
-                #pass
-                #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
-
 
 
         '''TESTING'''
