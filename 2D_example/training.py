@@ -12,7 +12,7 @@ import pdb
 
 
 
-batchsize = 16
+batchsize = 32
 
 
 
@@ -39,7 +39,6 @@ class error():
         
         rho_u_psi= torch.matmul(control_approx.unsqueeze(3) - control , control_monomials).mean(1)#torch.matmul(control*control_monomials, theta_u)
         
-        pdb.set_trace()
         pi = rho_q + rho_psi.squeeze()
 
         #print(rho_delta_phi * theta_v+ rho_u_psi * theta_u) # should be same as cat(rho, rho) * cat(theta, theta)
@@ -54,10 +53,12 @@ class error():
         #theta = la.lstsq(z, pi).solution #need to update pytorch.
 
         #or do it by hand:
+        theta =torch.matmul(torch.matmul( torch.inverse(torch.matmul(z.transpose(0,1), z)), z.transpose(0,1)),pi) #not invertable?!
+        #theta = (z * z )^(-1) *z * pi
         pdb.set_trace()
-        theta = torch.matmul(z.transpose(0,1), z) #not invertable?!
-        theta = (z * z )^(-1) *z * pi
-        return residual, theta_u, theta_v
+        theta_v, theta_u = torch.split(theta, [3,4], dim = 0)#TODO implement torch.size()[] instead of hard coding
+        #return residual, theta_v, theta_u
+        return theta_v, theta_u
     
     def value_iteration_left(self,trajectory, control, old_control, new_control, value_function, on_optimum):
         traj = torch.squeeze(trajectory, 0)
@@ -241,13 +242,14 @@ if __name__ == '__main__':
         print("epoch: ", epoch)
         for j,(x, u) in enumerate(train_loader):
 
-            residual = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
+            theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
+            print(theta_v, theta_u)
 
 
             if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
-                Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
-                #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':0},j + len(train_loader)*epoch)
-                old_control = deepcopy(new_control)
+                #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
+                #old_control = deepcopy(new_control)
+                pass
 
 
         '''TESTING'''

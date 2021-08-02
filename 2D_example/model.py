@@ -81,7 +81,8 @@ class polynomial_linear_critic(nn.Module):
         prod = torch.prod(x,2).unsqueeze(2)
         const = torch.ones_like(prod)
 
-        output = torch.cat((square, prod, const), 2)
+        #output = torch.cat((square, prod, const), 2)#adding a const leads to missing invertability
+        output = torch.cat((square, prod), 2)
         return output
 
 
