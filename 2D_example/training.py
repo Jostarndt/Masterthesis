@@ -4,6 +4,7 @@ import model
 import torch
 import torch.optim as optim
 import torch.nn as nn
+import torch.linalg as la
 from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
@@ -11,7 +12,7 @@ import pdb
 
 
 
-batchsize = 8
+batchsize = 16
 
 
 
@@ -27,20 +28,35 @@ class error():
         #value_function: also list of monomials - in the paper ist theta_v
         #TODO assert dimensionality of theta and monomial basis
         control_monomials = old_control(trajectory)#TODO should have same shape as control! -> this is going to be difficult?
-        rho_q = torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).sum((1,2,3))
+        rho_q = torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).mean((1,2,3)) #MEAN
 
         #print(control.size())
         #print(torch.matmul(value_function(trajectory[:,0]), theta_v))
-        rho_delta_phi = (torch.matmul(value_function(trajectory[:,0]), theta_v) - torch.matmul(value_function(trajectory[:,-1]), theta_v)).sum()#TODO which axis?
+        rho_delta_phi = value_function(trajectory[:,0]) - value_function(trajectory[:,-1])#(torch.matmul(value_function(trajectory[:,0]) - value_function(trajectory[:,-1]), theta_v)) 
         
         control_approx = torch.matmul(control_monomials, theta_u)
+        rho_psi = torch.mul(torch.matmul(control_approx, self.R), control_approx).mean(1)
+        
+        rho_u_psi= torch.matmul(control_approx.unsqueeze(3) - control , control_monomials).mean(1)#torch.matmul(control*control_monomials, theta_u)
+        
         pdb.set_trace()
-        rho_psi = torch.matmul(torch.matmul(control_approx, self.R), control_approx).sum()
+        pi = rho_q + rho_psi.squeeze()
 
+        #print(rho_delta_phi * theta_v+ rho_u_psi * theta_u) # should be same as cat(rho, rho) * cat(theta, theta)
+
+        #torch.matmul(torch.cat((rho_delta_phi, rho_u_psi), 2), torch.cat((theta_v, theta_u)))
+        z = torch.cat((rho_delta_phi, rho_u_psi), 2).squeeze()
         
-        pi = rho_q + rho_psi
+        #the equation system is now:     z*torch.cat((theta_v, theta_u)) = pi
+        # to achieve this, calculate: 
         
-        residual = pi
+        #pdb.set_trace()
+        #theta = la.lstsq(z, pi).solution #need to update pytorch.
+
+        #or do it by hand:
+        pdb.set_trace()
+        theta = torch.matmul(z.transpose(0,1), z) #not invertable?!
+        theta = (z * z )^(-1) *z * pi
         return residual, theta_u, theta_v
     
     def value_iteration_left(self,trajectory, control, old_control, new_control, value_function, on_optimum):
@@ -253,3 +269,5 @@ if __name__ == '__main__':
         print(name, param.data)
         
     print('done')
+
+
