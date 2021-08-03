@@ -12,7 +12,7 @@ import pdb
 
 
 
-batchsize = 32
+batchsize = 128
 
 
 
@@ -55,108 +55,11 @@ class error():
         #or do it by hand:
         theta =torch.matmul(torch.matmul( torch.inverse(torch.matmul(z.transpose(0,1), z)), z.transpose(0,1)),pi) #not invertable?!
         #theta = (z * z )^(-1) *z * pi
-        pdb.set_trace()
         theta_v, theta_u = torch.split(theta, [3,4], dim = 0)#TODO implement torch.size()[] instead of hard coding
         #return residual, theta_v, theta_u
-        return theta_v, theta_u
+        residual = torch.abs(torch.matmul(z, theta) - pi).sum()
+        return residual, theta_v, theta_u
     
-    def value_iteration_left(self,trajectory, control, old_control, new_control, value_function, on_optimum):
-        traj = torch.squeeze(trajectory, 0)
-        old_controls = old_control(traj).detach().reshape_as(control)
-        new_controls= new_control(traj).detach().reshape_as(control)
-        diff = torch.squeeze(old_controls - control, 0)
-        oc = torch.squeeze(old_controls, 0)
-        points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(-1,-2)))
-        points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
-        points_together = 2*points_b - points_a
-        control_loss =0.2* torch.mean(points_together, dim=-3)
-        
-        if on_optimum == True:
-            overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]))) - 0.5*torch.square(trajectory[:,0,0,0])- torch.square(trajectory[:,0,0,1]) #TODO make sure this is correct
-        elif on_optimum == False:
-            overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[:,-1]).detach())) + torch.squeeze(control_loss)
-            #overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[0][0]))) - torch.squeeze(torch.squeeze(value_function(trajectory[0][-1]))) + control_loss 
-
-        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
-        
-        overall_loss = torch.mean(overall_loss)
-        return overall_loss
-    
-    def value_iteration_right(self,trajectory, control, old_control, new_control, value_function, on_optimum):
-        traj = torch.squeeze(trajectory, 0)
-
-        old_controls = old_control(traj).detach()
-        new_controls= new_control(traj).detach()
-        diff = torch.squeeze(old_controls - control, 0)
-        oc = torch.squeeze(old_controls, 0)
-
-        points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(-1,-2)))
-        points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
-        points_together = 2*points_b - points_a
-
-        control_loss =0.2* torch.mean(points_together, dim=-3)
-        
-        if on_optimum == True:
-            overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]))) - 0.5*torch.square(trajectory[:,0,0,0])- torch.square(trajectory[:,0,0,1]) #TODO make sure this is correct
-        elif on_optimum == False:
-            overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]).detach())) - torch.squeeze(torch.squeeze(value_function(trajectory[:,-1]))) + torch.squeeze(control_loss)
-
-        overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
-        
-        #overall_loss = torch.mean(overall_loss)
-        return overall_loss
-
-    def policy_improvement(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5, noise_factor = 0):
-        traj = torch.squeeze(trajectory, 0)
-        
-        old_controls = old_control(traj).detach().reshape_as(control)
-        new_controls= new_control(traj).reshape_as(control)
-        diff = torch.squeeze(old_controls - control, 0)
-        oc= torch.squeeze(old_controls, 0)
-
-        points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(-1,-2)))
-        points_b = torch.matmul(new_controls, torch.matmul(self.R, diff.transpose(-1,-2)))
-        points_together = 2*points_b - points_a
-        control_loss =0.2* torch.mean(points_together, dim=-3)
-        #this is either on optimum or on the given value_function
-        #overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
-        #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
-        overall_loss = (1-op_factor)*(value_function(trajectory[:,0]).detach() - value_function(trajectory[:,-1]).detach()).reshape_as(control_loss) + (op_factor)*(0.5* trajectory[:,0,0,0]**2 + trajectory[:,0,0,1]**2 - 0.5* trajectory[:,-1,0,0]**2 - trajectory[:,-1,0,1]**2).reshape_as(control_loss)  + control_loss
-        
-        #print('is this always positive? ',(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach())  - (0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2))
-        #overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
-        #overall_loss = (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)*(1+ noise_factor*np.random.rand(1)) + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
-        
-        #print((value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()-0.5* traj[0][0][0]**2 - traj[0][0][1]**2 + 0.5* traj[-1][0][0]**2 + traj[-1][0][1]**2))
-
-        '''
-            compare_diff = torch.squeeze(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2)- torch.squeeze(control, 1), 0)
-            compare_b = torch.matmul(new_controls, torch.matmul(self.R, compare_diff))
-            compare_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2), torch.matmul(self.R, -torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2).transpose(1,2)))
-            compare_loss = 0.1*torch.mean(2*compare_b -compare_a)
-            pdb.set_trace()
-            compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
-        '''
-        #new_control.zero_grad()
-        #overall_loss = 0.2*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
-        #overall_loss = torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
-        #overall_loss =torch.mean(torch.abs(new_control(traj)+torch.ones(6).unsqueeze(1).unsqueeze(1))) 
-        
-        overall_loss = torch.square(overall_loss)#TODO: square instead?
-
-        overall_loss = torch.mean(overall_loss)
-        return overall_loss
-
-    def policy_warmup(self,trajectory, control, old_control, new_control, value_function, op_factor = 0.5):
-        traj = torch.squeeze(trajectory, 0)
-        
-        new_control.zero_grad()
-        overall_loss = 0.2*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
-        return overall_loss
-
-def optimal_value_function(traj):
-    return (0.5* traj[0,0]**2 + traj[0,1]**2)
-
 def present_results(value_function, new_control, stepname= "after_training"):
     int_const = value_function(torch.tensor([[0,0]], dtype= torch.float)).detach()
     print(int_const, ' - this is the integration constant')
@@ -211,26 +114,21 @@ if __name__ == '__main__':
 
     
     testset = dataset.create_dataset_different_control_and_starts(amount_startpoints=10)
-    test_loader = DataLoader(dataset = testset, batch_size = 1, shuffle =True)
+    test_loader = DataLoader(dataset = testset, batch_size = 2, shuffle =True)#2 to bring this into batch format
     
     dataset_stretch_factor =  len(train_loader)/len(test_loader)
 
-    ''' 
-        ##########
-        #plotting of the trajectories
-        ##########
-        for i,piece in enumerate(trainset):
-            for step in range(piece[0].size()[0]):
-                Writer.add_scalars('trajectories', {'first coord'+str(i): piece[0][step][0][0], 'second coord'+str(i): piece[0][step][0][1]}, step)
-            #Writer.add_histogram('trajectories', 
-    '''
 
     print("##################################")
     
     control_function = model.polynomial_linear_actor()
     value_function = model.polynomial_linear_critic()
+    pdb.set_trace()
     theta_u = torch.ones(4)
-    theta_v = torch.ones(4)
+    theta_v = torch.ones(3)
+    
+    theta_u =torch.tensor([0, 0, -1, 0], dtype = torch.float)
+    theta_v =torch.tensor([0.5, 1, 0], dtype = torch.float)
 
     costs = dgl.cost_functional()
 
@@ -238,31 +136,20 @@ if __name__ == '__main__':
     #present results!
 
     #Training and Testing
-    for epoch in range(100):
+    for epoch in range(10):
         print("epoch: ", epoch)
+        print('++++++++++++++++++++Train++++++++++++')
         for j,(x, u) in enumerate(train_loader):
 
-            theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
-            print(theta_v, theta_u)
-
-
-            if (j + len(train_loader)*epoch) %(50//batchsize) == 0:
-                #Writer.add_scalars('errors', {'train_policy_error': policy_error,'train_value_error':value_error},j + len(train_loader)*epoch)
-                #old_control = deepcopy(new_control)
-                pass
-
+            residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
+            print(residual, theta_v, theta_u)
 
         '''TESTING'''
-        old_control.eval()
-        value_function.eval()
-        new_control.eval()
+        print('Test')
         for j, (x, u) in enumerate(test_loader):
-            value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum = True)
-            
-            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor=0)
-            Writer.add_scalars('errors', {'test policy error': policy_error,'test value_error':value_error},(j + len(test_loader)*epoch)*dataset_stretch_factor )
- 
-        value_scheduler.step()
+            pass
+            #residual, _ , _ = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
+            #print(residual, theta_v, theta_u)
     
     #Presenting results
     present_results(value_function, new_control)
