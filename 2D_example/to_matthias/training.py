@@ -69,7 +69,7 @@ class Dataset():
         starting_points =torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1)*0.1 #multiplication to adapt to starting point given in problem formulation
 
 
-
+        print(controls)
 
         datasets=[]
         for i in itertools.product(controls, starting_points):
@@ -149,8 +149,8 @@ if __name__ == '__main__':
     theta_u = torch.ones(5)
     theta_v = torch.ones(3)
     
-    theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
-    theta_v =torch.tensor([0.5, 1, 0], dtype = torch.float)
+    #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
+    #theta_v =torch.tensor([0.5, 1, 0], dtype = torch.float)
 
 
     #Training and Testing
