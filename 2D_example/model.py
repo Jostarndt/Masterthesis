@@ -13,7 +13,7 @@ control_dim = 1
 batch_size = 2
 
 
-class actor(nn.Module):
+class actor_pol(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
         super(actor, self).__init__()
         #self.prod_weight = torch.nn.parameter.Parameter(torch.randn(1))
@@ -32,7 +32,7 @@ class actor(nn.Module):
         #output = x[:,0] * x[:,1] * self.prod_weight
         return output
 
-class actor_nn(nn.Module):
+class actor(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
         super(actor, self).__init__()
         self.fc1 = nn.Linear(space_dim, 50*space_dim)
@@ -52,7 +52,7 @@ class actor_nn(nn.Module):
         x = F.relu(self.fc2(x))
         return self.fc3(x)
 
-class critic_nn(nn.Module):
+class critic(nn.Module):
     def __init__(self, space_dim=1, positive = False):
         super(critic, self).__init__()
         self.s_dim = space_dim
@@ -80,7 +80,7 @@ class critic_nn(nn.Module):
         x = self.fc2(x)
         return torch.abs(x)
 
-class critic(nn.Module):
+class critic_pol(nn.Module):
     def __init__(self, space_dim=1, positive = False):
         super(critic, self).__init__()
         #self.bias_weights = torch.nn.parameter.Parameter(torch.randn(1))

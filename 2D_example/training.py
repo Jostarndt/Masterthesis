@@ -11,7 +11,7 @@ import pdb
 
 
 
-batchsize = 8
+batchsize = 32
 
 
 
@@ -176,24 +176,14 @@ if __name__ == '__main__':
     
     dataset_stretch_factor =  len(train_loader)/len(test_loader)
 
-    ''' 
-        ##########
-        #plotting of the trajectories
-        ##########
-        for i,piece in enumerate(trainset):
-            for step in range(piece[0].size()[0]):
-                Writer.add_scalars('trajectories', {'first coord'+str(i): piece[0][step][0][0], 'second coord'+str(i): piece[0][step][0][1]}, step)
-            #Writer.add_histogram('trajectories', 
-    '''
-
     print("##################################")
     old_control = model.actor(stabilizing = False, control_dim = 1, space_dim = 2)
     new_control = model.actor(stabilizing = False, control_dim = 1, space_dim = 2)
     value_function = model.critic(positive = True, space_dim = 2)
     costs = dgl.cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=50000) #0.005
-    value_optimizer = optim.SGD(value_function.parameters(), lr=10)#0.05
+    control_optimizer = optim.SGD(new_control.parameters(), lr=0.05) #0.05
+    value_optimizer = optim.SGD(value_function.parameters(), lr=0.05)#0.05
     #control_optimizer = optim.Adam(new_control.parameters(), lr=0.05)
     #value_optimizer = optim.Adam(value_function.parameters(), lr=0.02)
 
@@ -202,7 +192,8 @@ if __name__ == '__main__':
     
 
     for name, param in value_function.named_parameters():
-        print(name, param.data)
+        pass
+        #print(name, param.data)
  
     #Warmup
     for epoch in range(0):
@@ -222,14 +213,15 @@ if __name__ == '__main__':
     present_results(value_function, new_control, 'after_warmup')
 
     #Training and Testing
-    for epoch in range(700):
+    for epoch in range(20):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
         new_control.train()
         for j,(x, u) in enumerate(train_loader):
             #-------------Value iteration------------
-            if True:#epoch < 10:
+            #if True:#epoch < 10:
+            for i in range(20):
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum =False)
@@ -246,7 +238,7 @@ if __name__ == '__main__':
                 value_optimizer.step()
                 '''
 
-            if j == 0:
+            if False:#j == 0:
                 print("epoch: ", epoch)
                 print('parameters of value function', value_function.parameters())
                 for name, param in value_function.named_parameters():
@@ -258,7 +250,8 @@ if __name__ == '__main__':
                 #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
 
             #--------policy improvement------------
-            if True:#epoch < 5: #or epoch >= 6:
+            #if True:#epoch < 5: #or epoch >= 6:
+            for i in range(20):
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 #pdb.set_trace()
@@ -300,8 +293,10 @@ if __name__ == '__main__':
     
     #Presenting results
     present_results(value_function, new_control)
-    print('parameters of value function', value_function.parameters())
+    #print('parameters of value function', value_function.parameters())
+
     for name, param in value_function.named_parameters():
-        print(name, param.data)
+        pass
+        #print(name, param.data)
         
     print('done')
