@@ -4,7 +4,7 @@ import model
 import torch
 import torch.optim as optim
 import torch.nn as nn
-import torch.linalg as la
+#import torch.linalg as la
 from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
@@ -47,16 +47,19 @@ class error():
         z = torch.cat((rho_delta_phi, rho_u_psi), 2).squeeze()
         
         #the equation system is now:     z*torch.cat((theta_v, theta_u)) = pi
-        # to achieve this, calculate: 
         
+        #TODO
         #pdb.set_trace()
-        #theta = la.lstsq(z, pi).solution #need to update pytorch.
+        grad_step = torch.matmul( torch.matmul(z.transpose(0,1),  z), torch.cat((theta_v, theta_u))) - torch.matmul(z.transpose(0,1), pi) #TODO: sure that pi is correct?
 
         #or do it by hand:
-        theta =torch.matmul(torch.matmul( torch.inverse(torch.matmul(z.transpose(0,1), z)), z.transpose(0,1)),pi) #not invertable?!
+        #theta =torch.matmul(torch.matmul( torch.inverse(torch.matmul(z.transpose(0,1), z)), z.transpose(0,1)),pi) #not invertable?!
         #theta = (z * z )^(-1) *z * pi
+        
+        #theta = theta - alpha * grad
+        theta = torch.cat((theta_v, theta_u))  -  2 * 0.05 * grad_step #TODO check if correct.
         theta_v, theta_u = torch.split(theta, [3,4], dim = 0)#TODO implement torch.size()[] instead of hard coding
-        #return residual, theta_v, theta_u
+        
         residual = torch.abs(torch.matmul(z, theta) - pi).sum()
         return residual, theta_v, theta_u
     
@@ -123,7 +126,7 @@ if __name__ == '__main__':
     
     control_function = model.polynomial_linear_actor()
     value_function = model.polynomial_linear_critic()
-    pdb.set_trace()
+    
     theta_u = torch.ones(4)
     theta_v = torch.ones(3)
     
