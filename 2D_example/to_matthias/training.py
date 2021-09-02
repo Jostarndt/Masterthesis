@@ -64,14 +64,12 @@ class Dataset():
     def create_dataset_different_control_and_starts(self, amount_startpoints):
         controls = [[-i/10,-j/10] for i,j in zip(range(1, 5), range(1, 5))]
         #controls = [[-i/10,-j/10] for i,j in itertools.product(range(1, 5), range(1, 5))]
-        print(controls)
         controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)
         starting_points =np.random.rand(amount_startpoints,2)
         starting_points =torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1)*0.1 #multiplication to adapt to starting point given in problem formulation
 
-        print(starting_points)
 
-
+        print(controls)
 
         datasets=[]
         for i in itertools.product(controls, starting_points):
@@ -113,15 +111,15 @@ class error():
         self.R = torch.tensor([[1]], dtype = torch.float)
 
     def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v):
-        control_monomials = old_control(trajectory)#TODO should have same shape as control! -> this is going to be difficult?
-        rho_q = torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).mean((1,2,3)) #MEAN
+        control_monomials = old_control(trajectory)
+        rho_q = torch.mul(torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).mean((1,2,3)), 0.2) #MEAN
 
         rho_delta_phi = value_function(trajectory[:,0]) - value_function(trajectory[:,-1])
         
         control_approx = torch.matmul(control_monomials, theta_u)
-        rho_psi = torch.mul(torch.matmul(control_approx, self.R), control_approx).mean(1)
+        rho_psi =torch.mul(torch.mul(torch.matmul(control_approx, self.R), control_approx).mean(1), 0.2)#should be the same as torch.square(control_approx).mean()
         
-        rho_u_psi= 2* torch.matmul(control_approx.unsqueeze(3) - control , control_monomials).mean(1)
+        rho_u_psi= torch.mul(torch.mul( torch.matmul(control_approx.unsqueeze(3) - control , control_monomials), 2).mean(1),0.2)
         
         pi = rho_q + rho_psi.squeeze()
 
@@ -136,8 +134,8 @@ class error():
 if __name__ == '__main__':
     error = error()
     dataset = Dataset()
-    trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=500)
-    train_loader = DataLoader(dataset = trainset, batch_size = batchsize, shuffle =True)
+    trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=300)
+    train_loader = DataLoader(dataset = trainset, batch_size = batchsize, shuffle =False)
 
     
     testset = dataset.create_dataset_different_control_and_starts(amount_startpoints=10)
@@ -160,6 +158,7 @@ if __name__ == '__main__':
         print("epoch: ", epoch)
         print('residual, theta_v, theta_u')
         for j,(x, u) in enumerate(train_loader):
-
+            #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
+            #theta_v =torch.tensor([2.5, 5, 0], dtype = torch.float)
             residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
             print(residual, theta_v, theta_u)
