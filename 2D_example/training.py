@@ -139,7 +139,7 @@ if __name__ == '__main__':
     #present results!
 
     #Training and Testing
-    for epoch in range(10):
+    for epoch in range(40):
         print("epoch: ", epoch)
         print('++++++++++++++++++++Train++++++++++++')
         for j,(x, u) in enumerate(train_loader):
