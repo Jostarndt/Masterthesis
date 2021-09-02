@@ -129,11 +129,19 @@ class error():
 
         grad_step = torch.matmul( torch.matmul(z.transpose(0,1),  z), torch.cat((theta_v, theta_u))) - torch.matmul(z.transpose(0,1), pi) #TODO: sure that pi is correct?
 
+        grad_step_v, grad_step_u = torch.split(grad_step, [3,5], dim = 0)
+
+
+        theta_v = theta_v - 2 *800*grad_step_v
+        theta_u = theta_u - 2* 100 *grad_step_u
+
+        theta = torch.cat((theta_v, theta_u))
+
+        '''
         theta = torch.cat((theta_v, theta_u))  -  2 * 100 * grad_step #TODO check if correct.
 
-        
-
         theta_v, theta_u = torch.split(theta, [3,5], dim = 0)#TODO implement torch.size()[] instead of hard coding
+        '''
         residual = torch.abs(torch.matmul(z, theta) - pi).sum()
         return residual, theta_v, theta_u
     
