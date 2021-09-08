@@ -126,14 +126,28 @@ class error():
         z = torch.cat((rho_delta_phi, rho_u_psi), 2).squeeze()
         
         
+        '''repeat this :'''
+        for i in range(10000):
+            grad_step = torch.matmul( torch.matmul(z.transpose(0,1),  z), torch.cat((theta_v, theta_u))) - torch.matmul(z.transpose(0,1), pi) #TODO: sure that pi is correct?
 
-        grad_step = torch.matmul( torch.matmul(z.transpose(0,1),  z), torch.cat((theta_v, theta_u))) - torch.matmul(z.transpose(0,1), pi) #TODO: sure that pi is correct?
+            grad_step_v, grad_step_u = torch.split(grad_step, [3,5], dim = 0)
 
-        grad_step_v, grad_step_u = torch.split(grad_step, [3,5], dim = 0)
+            theta_v = theta_v - 2 *80*grad_step_v
+            theta_u = theta_u - 2* 10 *grad_step_u
+            
+            #pdb.set_trace()
+            #if torch.abs(grad_step).sum() < 0.0000001:
+            if torch.max(torch.abs(grad_step)) < 0.00000001:
+                #print(torch.abs(grad_step).sum(), 'grad step small enough')
+                print(grad_step, 'grad step small enough')
+                #print(grad_step)
+                break
 
 
-        theta_v = theta_v - 2 *800*grad_step_v
-        theta_u = theta_u - 2* 100 *grad_step_u
+            theta = torch.cat((theta_v, theta_u))
+            #pdb.set_trace()
+            residual = torch.abs(torch.matmul(z, theta) - pi).sum()
+            #print(residual)
 
         theta = torch.cat((theta_v, theta_u))
 
@@ -164,7 +178,7 @@ if __name__ == '__main__':
     theta_u = torch.ones(5)
     theta_v = torch.ones(3)
     
-    #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
+    #theta_u =torch.tensor([0, 0,0,0, -1.1], dtype = torch.float)
     #theta_v =torch.tensor([0.5, 1, 0], dtype = torch.float)
 
 
