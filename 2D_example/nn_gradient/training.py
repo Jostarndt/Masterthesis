@@ -15,7 +15,7 @@ import pdb
 
 
 
-batchsize = 8
+batchsize = 128
 
 
 class actor_pol(nn.Module):
@@ -264,29 +264,8 @@ class error():
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff.transpose(-1,-2)))
         points_together = 2*points_b - points_a
         control_loss =0.2* torch.mean(points_together, dim=-3)
-        #this is either on optimum or on the given value_function
-        #overall_loss =  (value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach() + control_loss).squeeze()
-        #overall_loss = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2  + control_loss
         overall_loss = (1-op_factor)*(value_function(trajectory[:,0]).detach() - value_function(trajectory[:,-1]).detach()).reshape_as(control_loss) + (op_factor)*(0.5* trajectory[:,0,0,0]**2 + trajectory[:,0,0,1]**2 - 0.5* trajectory[:,-1,0,0]**2 - trajectory[:,-1,0,1]**2).reshape_as(control_loss)  + control_loss
         
-        #print('is this always positive? ',(value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach())  - (0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2))
-        #overall_loss = (1-op_factor)*(value_function(trajectory[0][0]).detach() - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2).squeeze() + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
-        #overall_loss = (1-op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)*(1+ noise_factor*np.random.rand(1)) + (op_factor)*(0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2)  + control_loss
-        
-        #print((value_function(trajectory[0][0]).detach() - value_function(trajectory[0][-1]).detach()-0.5* traj[0][0][0]**2 - traj[0][0][1]**2 + 0.5* traj[-1][0][0]**2 + traj[-1][0][1]**2))
-
-        '''
-            compare_diff = torch.squeeze(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2)- torch.squeeze(control, 1), 0)
-            compare_b = torch.matmul(new_controls, torch.matmul(self.R, compare_diff))
-            compare_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(1,2))) + torch.matmul(-torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2), torch.matmul(self.R, -torch.unsqueeze(traj[:,:,1]*traj[:,:,0], 2).transpose(1,2)))
-            compare_loss = 0.1*torch.mean(2*compare_b -compare_a)
-            pdb.set_trace()
-            compare = 0.5* traj[0][0][0]**2 + traj[0][0][1]**2 - 0.5* traj[-1][0][0]**2 - traj[-1][0][1]**2 + compare_loss
-        '''
-        #new_control.zero_grad()
-        #overall_loss = 0.2*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
-        #overall_loss = torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,1]*traj[:,:,0],1)))
-        #overall_loss =torch.mean(torch.abs(new_control(traj)+torch.ones(6).unsqueeze(1).unsqueeze(1))) 
         
         overall_loss = torch.square(overall_loss)#TODO: square instead?
 
@@ -400,7 +379,7 @@ if __name__ == '__main__':
             points_together = 2*points_b - points_a
             control_loss =0.2* torch.mean(points_together, dim=-3)
 
-            for i in range(10):#epoch < 10:
+            for i in range(50):#epoch < 10:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 
@@ -421,13 +400,27 @@ if __name__ == '__main__':
             print(overall_loss)
 
             #--------policy improvement------------
-            #for i in range(50):#epoch < 5: #or epoch >= 6:
-            #    control_optimizer.zero_grad()
-            #    value_optimizer.zero_grad()
-            #    policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 0, noise_factor = 0)
-            #    assert policy_error !=  0
-            #    policy_error.backward()
-            #    control_optimizer.step()
+            overall_loss =(value_function(x[:,0]).detach() - value_function(x[:,-1]).detach())
+            for i in range(50):#epoch < 5: #or epoch >= 6:
+                control_optimizer.zero_grad()
+                value_optimizer.zero_grad()
+        
+                new_controls= new_control(traj).reshape_as(u)
+
+                points_b = torch.matmul(new_controls, torch.matmul(R, diff.transpose(-1,-2)))
+                points_together = 2*points_b - points_a
+                control_loss =0.2* torch.mean(points_together, dim=-3)
+                overall_loss =overall_loss.reshape_as(control_loss) + control_loss
+        
+        
+                overall_loss = torch.square(overall_loss)#TODO: square instead?
+
+                overall_loss = torch.mean(overall_loss)
+
+                # abbruchkriteriumassert policy_error !=  0
+                overall_loss.backward()
+                control_optimizer.step()
+            print(overall_loss)
 
             
 
