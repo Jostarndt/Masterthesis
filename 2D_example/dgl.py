@@ -17,7 +17,6 @@ class Dataset():
         self.dataset = []
         self.datasets = []
         self.pde = dgl()
-        self.kosten = cost_functional()
 
     def create_double(self, starting_point = None, control_value = None):
         '''creation of starting point'''
@@ -81,31 +80,6 @@ class dgl:
             output_control = torch.cat((output_control,torch.unsqueeze(con_value, 1)))
 
         return output_traj, output_control
-
-
-class cost_functional:
-    def __init__(self):
-        self.Q = torch.tensor([[1]],dtype=torch.float)
-        self.R = torch.tensor([[1]], dtype = torch.float)
-
-    def approx_costs(self, x_values, l_control_values, r_control_values, x_size):
-        '''
-        #returns the integral over xQx + uRU$
-        '''
-
-        '''
-        #this is for checking if the square works also in batches:
-
-        print('x_values: ', x_values)
-        print('x_values times 1',torch.matmul(self.Q,x_values))
-        print('quadrat: ', torch.matmul(x_values, torch.matmul(self.Q,x_values)))
-        '''
-        points = torch.matmul(x_values, torch.matmul(self.Q,x_values))+ torch.matmul(l_control_values, torch.matmul(self.R,r_control_values))
-        #summands = torch.square(points)
-        summands = torch.abs(points)
-        integral = torch.mean(summands)
-        return integral * x_size
-
 
 
 

@@ -38,8 +38,9 @@ class polynomial_linear_actor(nn.Module):
     def forward(self, x):
         square = torch.square(x) #(x,y) -> (x^2, y^2)
         prod = torch.prod(x, 3).unsqueeze(3) #(x, y) -> x*y
-        const = torch.ones_like(prod) #-> c
-        output = torch.cat((square,prod, const), 3)
+        #const = torch.ones_like(prod) #-> c
+        #output = torch.cat((square,prod, const), 3)
+        output = torch.cat((x, square, prod), 3)
         return output
 
 
