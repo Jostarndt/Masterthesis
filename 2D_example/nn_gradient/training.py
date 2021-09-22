@@ -379,7 +379,7 @@ if __name__ == '__main__':
             points_together = 2*points_b - points_a
             control_loss =0.2* torch.mean(points_together, dim=-3)
 
-            for i in range(50):#epoch < 10:
+            for i in range(500):#epoch < 10:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 
@@ -393,6 +393,8 @@ if __name__ == '__main__':
                 overall_loss = torch.mean(overall_loss)
                 
                 #check for abbruchkriterium
+                if overall_loss < 10^(-8):
+                    break
                 #print(overall_loss)
                 overall_loss.backward()
                 value_optimizer.step()
@@ -400,8 +402,8 @@ if __name__ == '__main__':
             print(overall_loss)
 
             #--------policy improvement------------
-            overall_loss =(value_function(x[:,0]).detach() - value_function(x[:,-1]).detach())
-            for i in range(50):#epoch < 5: #or epoch >= 6:
+            overall_loss_init =(value_function(x[:,0]).detach() - value_function(x[:,-1]).detach())
+            for i in range(500):#epoch < 5: #or epoch >= 6:
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
         
@@ -410,7 +412,8 @@ if __name__ == '__main__':
                 points_b = torch.matmul(new_controls, torch.matmul(R, diff.transpose(-1,-2)))
                 points_together = 2*points_b - points_a
                 control_loss =0.2* torch.mean(points_together, dim=-3)
-                overall_loss =overall_loss.reshape_as(control_loss) + control_loss
+                #pdb.set_trace()
+                overall_loss =overall_loss_init.reshape_as(control_loss) + control_loss
         
         
                 overall_loss = torch.square(overall_loss)#TODO: square instead?
@@ -418,16 +421,11 @@ if __name__ == '__main__':
                 overall_loss = torch.mean(overall_loss)
 
                 # abbruchkriteriumassert policy_error !=  0
+                if overall_loss < 10^(-8):
+                    break
                 overall_loss.backward()
                 control_optimizer.step()
             print(overall_loss)
-
-            
-
-            if j == 0:
-                print("epoch: ", epoch)
-                #present_results(value_function, new_control, 'after '+str(epoch)+' epochs')
-
 
 
         '''TESTING'''
