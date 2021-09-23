@@ -1,12 +1,7 @@
 import numpy as np
-import dgl
 import torch
 import torch.optim as optim
 import torch.nn as nn
-
-
-from copy import deepcopy
-from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import itertools
@@ -15,7 +10,9 @@ from torch.utils.data import TensorDataset, ConcatDataset
 
 
 
-batchsize = 4096
+batchsize = 512#4096
+
+
 class polynomial_linear_actor(nn.Module):
     def __init__(self):
         super(polynomial_linear_actor, self).__init__()
@@ -27,15 +24,11 @@ class polynomial_linear_actor(nn.Module):
 
 class polynomial_linear_critic(nn.Module):
     def __init__(self):
-        print('correct function')
         super(polynomial_linear_critic, self).__init__()
     def forward(self, x):
         square = torch.square(x)
         prod = torch.prod(x,2).unsqueeze(2)
-        const = torch.ones_like(prod)
-
-        #output = torch.cat((square, prod, const), 2)#adding a const leads to missing invertability
-        output = torch.cat((square, prod), 2)
+        output = torch.cat((square, prod), 2)#output is: (x,y) -> (x^2, y^2, xy)
         return output
 
 
@@ -71,16 +64,12 @@ class Dataset():
     def create_dataset_different_control_and_starts(self, amount_startpoints):
         controls = [[-i/10,-j/10] for i,j in zip(range(1, 5), range(1, 5))]
         #controls = [[-i/10,-j/10] for i,j in itertools.product(range(1, 5), range(1, 5))]
-        print(controls)
-        controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
-        #controls = [-i/2 for i in range(7)]
-        #controls = torch.unsqueeze(torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
+        controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)
         starting_points =np.random.rand(amount_startpoints,2)
         starting_points =torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1)*0.1 #multiplication to adapt to starting point given in problem formulation
 
-        print(starting_points)
 
-
+        print(controls)
 
         datasets=[]
         for i in itertools.product(controls, starting_points):
@@ -116,66 +105,93 @@ class dgl:
 
 
 
-
 class error():
     def __init__(self):
         self.Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
         self.R = torch.tensor([[1]], dtype = torch.float)
 
     def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v):
-        #new_control: model that delivers a vector of monomials
-        #old_control: exactly the same as new_control -> not needed at all! TODO remove
-        #value_function: also list of monomials - in the paper ist theta_v
-        #TODO assert dimensionality of theta and monomial basis
-        control_monomials = old_control(trajectory)#TODO should have same shape as control! -> this is going to be difficult?
-        rho_q = torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).mean((1,2,3)) #MEAN
+        control_monomials = old_control(trajectory)
+        rho_q = torch.mul(torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).mean((1,2,3)), 0.2) #MEAN
 
-        #print(control.size())
-        #print(torch.matmul(value_function(trajectory[:,0]), theta_v))
-        rho_delta_phi = value_function(trajectory[:,0]) - value_function(trajectory[:,-1])#(torch.matmul(value_function(trajectory[:,0]) - value_function(trajectory[:,-1]), theta_v)) 
+        rho_delta_phi = value_function(trajectory[:,0]) - value_function(trajectory[:,-1])
         
         control_approx = torch.matmul(control_monomials, theta_u)
-        rho_psi = torch.mul(torch.matmul(control_approx, self.R), control_approx).mean(1)
+        rho_psi =torch.mul(torch.mul(torch.matmul(control_approx, self.R), control_approx).mean(1), 0.2)#should be the same as torch.square(control_approx).mean()
         
-        rho_u_psi= 2* torch.matmul(control_approx.unsqueeze(3) - control , control_monomials).mean(1)#torch.matmul(control*control_monomials, theta_u)
+        rho_u_psi= torch.mul(torch.mul( torch.matmul(control_approx.unsqueeze(3) - control , control_monomials), 2).mean(1),0.2)
         
         pi = rho_q + rho_psi.squeeze()
 
-        #print(rho_delta_phi * theta_v+ rho_u_psi * theta_u) # should be same as cat(rho, rho) * cat(theta, theta)
-
-        #torch.matmul(torch.cat((rho_delta_phi, rho_u_psi), 2), torch.cat((theta_v, theta_u)))
         z = torch.cat((rho_delta_phi, rho_u_psi), 2).squeeze()
         
-        #the equation system is now:     z*torch.cat((theta_v, theta_u)) = pi
         
+        '''repeat this :'''
+        for i in range(10000):
+            grad_step = torch.matmul( torch.matmul(z.transpose(0,1),  z), torch.cat((theta_v, theta_u))) - torch.matmul(z.transpose(0,1), pi) #TODO: sure that pi is correct?
 
-        grad_step = torch.matmul( torch.matmul(z.transpose(0,1),  z), torch.cat((theta_v, theta_u))) - torch.matmul(z.transpose(0,1), pi) #TODO: sure that pi is correct?
+            hessian = torch.matmul(z.transpose(0,1), z)
+
+            grad_step = torch.matmul(torch.inverse(hessian), grad_step)
+
+            grad_step_v, grad_step_u = torch.split(grad_step, [3,5], dim = 0)
+
+            theta_v = theta_v - 2 *0.1*grad_step_v
+            theta_u = theta_u - 2* 0.1 *grad_step_u
+            
+            #pdb.set_trace()
+            #if torch.abs(grad_step).sum() < 0.0000001:
+            if torch.max(torch.abs(grad_step)) < 0.00000001:
+                #print(torch.abs(grad_step).sum(), 'grad step small enough')
+                print(grad_step, 'grad step small enough')
+                #print(grad_step)
+                break
 
 
+            theta = torch.cat((theta_v, theta_u))
+            #pdb.set_trace()
+            residual = torch.abs(torch.matmul(z, theta) - pi).sum()
+            #print(residual)
 
-        
-      
-        theta = torch.cat((theta_v, theta_u))  -  2 * 0.05 * grad_step #TODO check if correct.
-        theta_v, theta_u = torch.split(theta, [3,4], dim = 0)#TODO implement torch.size()[] instead of hard coding
-        
+        theta = torch.cat((theta_v, theta_u))
+
+        '''
+        theta = torch.cat((theta_v, theta_u))  -  2 * 100 * grad_step #TODO check if correct.
+
+        theta_v, theta_u = torch.split(theta, [3,5], dim = 0)#TODO implement torch.size()[] instead of hard coding
+        '''
         residual = torch.abs(torch.matmul(z, theta) - pi).sum()
         return residual, theta_v, theta_u
     
 
 if __name__ == '__main__':
+    error = error()
+    dataset = Dataset()
+    trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=300)
+    train_loader = DataLoader(dataset = trainset, batch_size = batchsize, shuffle =False)
+
     
-    #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
+    testset = dataset.create_dataset_different_control_and_starts(amount_startpoints=10)
+    test_loader = DataLoader(dataset = testset, batch_size = 2, shuffle =True)#2 to bring this into batch format
+
+
+    print("##################################")
+    
+    control_function = polynomial_linear_actor()
+    value_function = polynomial_linear_critic()
+    theta_u = torch.ones(5)
+    theta_v = torch.ones(3)
+    
+    #theta_u =torch.tensor([0, 0,0,0, -1.1], dtype = torch.float)
     #theta_v =torch.tensor([0.5, 1, 0], dtype = torch.float)
 
 
-
-    #present results!
-
     #Training and Testing
-    for epoch in range(40):
+    for epoch in range(2000):
         print("epoch: ", epoch)
-        print('++++++++++++++++++++Train++++++++++++')
+        print('residual, theta_v, theta_u')
         for j,(x, u) in enumerate(train_loader):
-
+            #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
+            #theta_v =torch.tensor([2.5, 5, 0], dtype = torch.float)
             residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
-            print(residual, theta_v, theta_u)
+        print(residual, theta_v, theta_u)

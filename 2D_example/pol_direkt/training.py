@@ -1,11 +1,35 @@
 import numpy as np
 import torch
-import model
+import torch.optim as optim
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
 import itertools
-import timeit
 import pdb
-
 from torch.utils.data import TensorDataset, ConcatDataset
+
+
+
+batchsize = 4096
+
+
+class polynomial_linear_actor(nn.Module):
+    def __init__(self):
+        super(polynomial_linear_actor, self).__init__()
+    def forward(self, x):
+        square = torch.square(x) #(x,y) -> (x^2, y^2)
+        prod = torch.prod(x, 3).unsqueeze(3) #(x, y) -> x*y
+        output = torch.cat((x, square, prod), 3)
+        return output
+
+class polynomial_linear_critic(nn.Module):
+    def __init__(self):
+        super(polynomial_linear_critic, self).__init__()
+    def forward(self, x):
+        square = torch.square(x)
+        prod = torch.prod(x,2).unsqueeze(2)
+        output = torch.cat((square, prod), 2)#output is: (x,y) -> (x^2, y^2, xy)
+        return output
 
 
 class Dataset():
@@ -40,16 +64,12 @@ class Dataset():
     def create_dataset_different_control_and_starts(self, amount_startpoints):
         controls = [[-i/10,-j/10] for i,j in zip(range(1, 5), range(1, 5))]
         #controls = [[-i/10,-j/10] for i,j in itertools.product(range(1, 5), range(1, 5))]
-        print(controls)
-        controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
-        #controls = [-i/2 for i in range(7)]
-        #controls = torch.unsqueeze(torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
+        controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)
         starting_points =np.random.rand(amount_startpoints,2)
         starting_points =torch.unsqueeze(torch.tensor(starting_points, dtype= torch.float), 1)*0.1 #multiplication to adapt to starting point given in problem formulation
 
-        print(starting_points)
 
-
+        print(controls)
 
         datasets=[]
         for i in itertools.product(controls, starting_points):
@@ -83,7 +103,62 @@ class dgl:
 
 
 
+
+
+class error():
+    def __init__(self):
+        self.Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
+        self.R = torch.tensor([[1]], dtype = torch.float)
+
+    def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v):
+        control_monomials = old_control(trajectory)
+        rho_q = torch.mul(torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).mean((1,2,3)), 0.2) #MEAN
+
+        rho_delta_phi = value_function(trajectory[:,0]) - value_function(trajectory[:,-1])
+        
+        control_approx = torch.matmul(control_monomials, theta_u)
+        rho_psi =torch.mul(torch.mul(torch.matmul(control_approx, self.R), control_approx).mean(1), 0.2)#should be the same as torch.square(control_approx).mean()
+        
+        rho_u_psi= torch.mul(torch.mul( torch.matmul(control_approx.unsqueeze(3) - control , control_monomials), 2).mean(1),0.2)
+        
+        pi = rho_q + rho_psi.squeeze()
+
+        z = torch.cat((rho_delta_phi, rho_u_psi), 2).squeeze()
+        
+        theta =torch.matmul(torch.matmul( torch.inverse(torch.matmul(z.transpose(0,1), z)), z.transpose(0,1)),pi) #not invertable?!
+        theta_v, theta_u = torch.split(theta, [3,5], dim = 0)#TODO implement torch.size()[] instead of hard coding
+        residual = torch.abs(torch.matmul(z, theta) - pi).sum()
+        return residual, theta_v, theta_u
+    
+
 if __name__ == '__main__':
-    print('start')
+    error = error()
     dataset = Dataset()
-    dataset.create_dataset_different_control_and_starts()
+    trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=300)
+    train_loader = DataLoader(dataset = trainset, batch_size = batchsize, shuffle =False)
+
+    
+    testset = dataset.create_dataset_different_control_and_starts(amount_startpoints=10)
+    test_loader = DataLoader(dataset = testset, batch_size = 2, shuffle =True)#2 to bring this into batch format
+
+
+    print("##################################")
+    
+    control_function = polynomial_linear_actor()
+    value_function = polynomial_linear_critic()
+    theta_u = torch.ones(5)
+    theta_v = torch.ones(3)
+    
+    #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
+    #theta_v =torch.tensor([0.5, 1, 0], dtype = torch.float)
+
+
+    #Training and Testing
+    for epoch in range(10):
+        print("epoch: ", epoch)
+        print('residual, theta_v, theta_u')
+        for j,(x, u) in enumerate(train_loader):
+            #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
+            #theta_v =torch.tensor([2.5, 5, 0], dtype = torch.float)
+            residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
+            print(residual, theta_v, theta_u)
