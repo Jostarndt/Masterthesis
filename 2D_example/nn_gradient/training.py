@@ -15,27 +15,9 @@ import pdb
 
 
 
-batchsize = 128
+batchsize = 4096
 
 
-class actor_pol(nn.Module):
-    def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
-        super(actor, self).__init__()
-        #self.prod_weight = torch.nn.parameter.Parameter(torch.randn(1))
-        self.prod_weight = torch.nn.parameter.Parameter(torch.tensor([-0.9]))
-        #self.square_left = torch.nn.parameter.Parameter(torch.randn(2))
-        #self.square_left = torch.nn.parameter.Parameter(torch.tensor([0.,-1]))
-        self.square_left = torch.tensor([0.,1])
-        #self.square_right = torch.nn.parameter.Parameter(torch.randn(2))
-        #self.square_right = torch.nn.parameter.Parameter(torch.tensor([0.,0.]))
-        self.square_right = torch.tensor([1.,0.])
-    def forward(self, x):
-        #pdb.set_trace()
-        output =torch.matmul(torch.matmul(self.square_left, torch.matmul(x.transpose(-2,-1), x)), self.square_right)
-        
-        output = self.prod_weight * output
-        #output = x[:,0] * x[:,1] * self.prod_weight
-        return output
 
 class actor(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
@@ -85,18 +67,6 @@ class critic(nn.Module):
         x = self.fc2(x)
         return torch.abs(x)
 
-class critic_pol(nn.Module):
-    def __init__(self, space_dim=1, positive = False):
-        super(critic, self).__init__()
-        #self.bias_weights = torch.nn.parameter.Parameter(torch.randn(1))
-        #self.linear_weights= torch.nn.parameter.Parameter(torch.randn(space_dim))
-        self.square_weights = torch.nn.parameter.Parameter(torch.randn(space_dim))
-        #self.square_weights = torch.nn.parameter.Parameter(torch.tensor([0.5, 1]))
-        
-    def forward(self, x):
-        x_square = torch.square(x)
-        output = torch.matmul(x_square, self.square_weights)#+ torch.matmul(x, self.linear_weights) 
-        return output
 
 
 
@@ -347,8 +317,8 @@ if __name__ == '__main__':
     value_function = critic(positive = True, space_dim = 2)
     costs = cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=0.005) #0.005
-    value_optimizer = optim.SGD(value_function.parameters(), lr=0.05)#0.05
+    control_optimizer = optim.SGD(new_control.parameters(), lr=50) #0.005
+    value_optimizer = optim.SGD(value_function.parameters(), lr=100)#0.05
 
     lmbda = lambda epoch : 1 if epoch < 500 else 0.99# 0.996
     value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
@@ -356,12 +326,9 @@ if __name__ == '__main__':
     Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
     R = torch.tensor([[1]], dtype = torch.float)
 
-    for name, param in value_function.named_parameters():
-        print(name, param.data)
- 
 
     #Training and Testing
-    for epoch in range(100):
+    for epoch in range(1, 100, 1):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
@@ -379,7 +346,7 @@ if __name__ == '__main__':
             points_together = 2*points_b - points_a
             control_loss =0.2* torch.mean(points_together, dim=-3)
 
-            for i in range(500):#epoch < 10:
+            for i in range(500):
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 
@@ -388,12 +355,11 @@ if __name__ == '__main__':
                 #    overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]))) - 0.5*torch.square(trajectory[:,0,0,0])- torch.square(trajectory[:,0,0,1]) #TODO make sure this is correct
                 overall_loss =  torch.squeeze(torch.squeeze(value_function(x[:,0]))) - torch.squeeze(torch.squeeze(value_function(x[:,-1]).detach())) + torch.squeeze(control_loss)
 
-                overall_loss = torch.square(overall_loss)# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
+                overall_loss = torch.square(overall_loss).mean()# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
         
-                overall_loss = torch.mean(overall_loss)
-                
                 #check for abbruchkriterium
-                if overall_loss < 10^(-8):
+                if overall_loss < 10^(-13):
+                    print('max reached')
                     break
                 #print(overall_loss)
                 overall_loss.backward()
@@ -403,7 +369,7 @@ if __name__ == '__main__':
 
             #--------policy improvement------------
             overall_loss_init =(value_function(x[:,0]).detach() - value_function(x[:,-1]).detach())
-            for i in range(500):#epoch < 5: #or epoch >= 6:
+            for i in range(500):
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
         
@@ -416,12 +382,11 @@ if __name__ == '__main__':
                 overall_loss =overall_loss_init.reshape_as(control_loss) + control_loss
         
         
-                overall_loss = torch.square(overall_loss)#TODO: square instead?
-
-                overall_loss = torch.mean(overall_loss)
+                overall_loss = torch.square(overall_loss).mean()#TODO: square instead?
 
                 # abbruchkriteriumassert policy_error !=  0
-                if overall_loss < 10^(-8):
+                if overall_loss < 10^(-13):
+                    print('max reached')
                     break
                 overall_loss.backward()
                 control_optimizer.step()
