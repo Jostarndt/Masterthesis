@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import itertools
 import pdb
+import time
 from torch.utils.data import TensorDataset, ConcatDataset
 
 
@@ -127,7 +128,9 @@ class error():
         
         theta =torch.matmul(torch.matmul( torch.inverse(torch.matmul(z.transpose(0,1), z)), z.transpose(0,1)),pi) #not invertable?!
         theta_v, theta_u = torch.split(theta, [3,5], dim = 0)#TODO implement torch.size()[] instead of hard coding
-        residual = torch.abs(torch.matmul(z, theta) - pi).sum()
+        #pdb.set_trace()
+        #initial_residual = torch.square(torch.matmul(z, torch.tensor([1, 1, 1, 1, 1 ,1 ,1 ,1], dtype = torch.float)) - pi).sum()
+        residual = torch.square(torch.matmul(z, theta) - pi).sum()
         return residual, theta_v, theta_u
     
 
@@ -154,11 +157,18 @@ if __name__ == '__main__':
 
 
     #Training and Testing
-    for epoch in range(10):
+    for epoch in range(1, 11, 1):
         print("epoch: ", epoch)
         print('residual, theta_v, theta_u')
+        start = time.time()
         for j,(x, u) in enumerate(train_loader):
             #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
             #theta_v =torch.tensor([2.5, 5, 0], dtype = torch.float)
             residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
             print(residual, theta_v, theta_u)
+            #pdb.set_trace()
+            #L1 error of v and u 
+            #print('differences: v, u: , ', torch.abs(theta_v - torch.tensor([0.5, 1 ,0], dtype = torch.float)).mean(), torch.abs(theta_u - torch.tensor([0, 0 ,0,0,-1], dtype = torch.float)).mean())
+
+        end = time.time()
+        print('elapsed time: ', end-start)

@@ -6,11 +6,12 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import itertools
 import pdb
+import time
 from torch.utils.data import TensorDataset, ConcatDataset
 
 
 
-batchsize = 512#4096
+batchsize = 4096 #512#4096
 
 
 class polynomial_linear_actor(nn.Module):
@@ -110,7 +111,7 @@ class error():
         self.Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
         self.R = torch.tensor([[1]], dtype = torch.float)
 
-    def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v):
+    def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v, epoch):
         control_monomials = old_control(trajectory)
         rho_q = torch.mul(torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).mean((1,2,3)), 0.2) #MEAN
 
@@ -127,27 +128,37 @@ class error():
         
         
         '''repeat this :'''
+        stepsize_v = 80
+        stepsize_u = 10
+        if epoch >= 10:
+            stepsize_u = 160
+            if epoch >= 30:
+                stepsize_u = 300
+                if epoch >= 50:
+                    stepsize_u = 400
+                    #if epoch >= 70:
+                        #stepsize_u = 450
         for i in range(10000):
             grad_step = torch.matmul( torch.matmul(z.transpose(0,1),  z), torch.cat((theta_v, theta_u))) - torch.matmul(z.transpose(0,1), pi) #TODO: sure that pi is correct?
 
             grad_step_v, grad_step_u = torch.split(grad_step, [3,5], dim = 0)
 
-            theta_v = theta_v - 2 *80*grad_step_v
-            theta_u = theta_u - 2* 10 *grad_step_u
+            theta_v = theta_v - 2 * stepsize_v * grad_step_v
+            theta_u = theta_u - 2 * stepsize_u * grad_step_u
             
-            #pdb.set_trace()
-            #if torch.abs(grad_step).sum() < 0.0000001:
-            if torch.max(torch.abs(grad_step)) < 0.00000001:
-                #print(torch.abs(grad_step).sum(), 'grad step small enough')
-                print(grad_step, 'grad step small enough')
-                #print(grad_step)
-                break
 
 
             theta = torch.cat((theta_v, theta_u))
             #pdb.set_trace()
             residual = torch.abs(torch.matmul(z, theta) - pi).sum()
             #print(residual)
+            
+            #pdb.set_trace()
+            #if torch.abs(grad_step).sum() < 0.0000001:
+            if torch.max(torch.abs(grad_step)) < 1* 10^(-6):
+                print(torch.abs(grad_step).sum(), 'grad step small enough')
+                #if residual > 0.01:
+                    #schrittweise kleiner machen
 
         theta = torch.cat((theta_v, theta_u))
 
@@ -156,7 +167,7 @@ class error():
 
         theta_v, theta_u = torch.split(theta, [3,5], dim = 0)#TODO implement torch.size()[] instead of hard coding
         '''
-        residual = torch.abs(torch.matmul(z, theta) - pi).sum()
+        residual = torch.square(torch.matmul(z, theta) - pi).sum()
         return residual, theta_v, theta_u
     
 
@@ -183,11 +194,15 @@ if __name__ == '__main__':
 
 
     #Training and Testing
-    for epoch in range(2000):
+    start = time.time()
+    for epoch in range(1,200, 1):
         print("epoch: ", epoch)
         print('residual, theta_v, theta_u')
         for j,(x, u) in enumerate(train_loader):
             #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
             #theta_v =torch.tensor([2.5, 5, 0], dtype = torch.float)
-            residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
+            residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v, epoch = epoch)
         print(residual, theta_v, theta_u)
+        print('differences: v, u: , ', torch.abs(theta_v - torch.tensor([0.5, 1 ,0], dtype = torch.float)).mean(), torch.abs(theta_u - torch.tensor([0, 0 ,0,0,-1], dtype = torch.float)).mean())
+        end = time.time()
+        print('elapsed total time: ', end-start)
