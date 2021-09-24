@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset, ConcatDataset
 
 
 
-batchsize = 512#4096
+batchsize = 4096#512#4096
 
 
 class polynomial_linear_actor(nn.Module):
@@ -136,8 +136,8 @@ class error():
 
             grad_step_v, grad_step_u = torch.split(grad_step, [3,5], dim = 0)
 
-            theta_v = theta_v - 2 *0.1*grad_step_v
-            theta_u = theta_u - 2* 0.1 *grad_step_u
+            theta_v = theta_v - 2 *0.05*grad_step_v
+            theta_u = theta_u - 2* 0.05 *grad_step_u
             
             #pdb.set_trace()
             #if torch.abs(grad_step).sum() < 0.0000001:
@@ -148,11 +148,6 @@ class error():
                 break
 
 
-            theta = torch.cat((theta_v, theta_u))
-            #pdb.set_trace()
-            residual = torch.abs(torch.matmul(z, theta) - pi).sum()
-            #print(residual)
-
         theta = torch.cat((theta_v, theta_u))
 
         '''
@@ -160,7 +155,7 @@ class error():
 
         theta_v, theta_u = torch.split(theta, [3,5], dim = 0)#TODO implement torch.size()[] instead of hard coding
         '''
-        residual = torch.abs(torch.matmul(z, theta) - pi).sum()
+        residual = torch.square(torch.matmul(z, theta) - pi).sum()
         return residual, theta_v, theta_u
     
 
