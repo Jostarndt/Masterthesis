@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import itertools
 import pdb
+import time
 from torch.utils.data import TensorDataset, ConcatDataset
 
 
@@ -141,9 +142,9 @@ class error():
             
             #pdb.set_trace()
             #if torch.abs(grad_step).sum() < 0.0000001:
-            if torch.max(torch.abs(grad_step)) < 0.00000001:
+            if torch.max(torch.abs(grad_step)) < 0.00000001:#TODO difference to 10^(-8)
                 #print(torch.abs(grad_step).sum(), 'grad step small enough')
-                print(grad_step, 'grad step small enough')
+                print(grad_step, 'grad step small enough. Steps it took: ', i)
                 #print(grad_step)
                 break
 
@@ -182,7 +183,8 @@ if __name__ == '__main__':
 
 
     #Training and Testing
-    for epoch in range(2000):
+    start = time.time()
+    for epoch in range(1, 20, 1):
         print("epoch: ", epoch)
         print('residual, theta_v, theta_u')
         for j,(x, u) in enumerate(train_loader):
@@ -190,3 +192,5 @@ if __name__ == '__main__':
             #theta_v =torch.tensor([2.5, 5, 0], dtype = torch.float)
             residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
         print(residual, theta_v, theta_u)
+        end = time.time()
+        print('elapsed time: ', end-start)
