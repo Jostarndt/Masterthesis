@@ -317,8 +317,10 @@ if __name__ == '__main__':
     value_function = critic(positive = True, space_dim = 2)
     costs = cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=50) #0.005
-    value_optimizer = optim.SGD(value_function.parameters(), lr=100)#0.05
+    control_optimizer = optim.SGD(new_control.parameters(), lr=50) #50
+    value_optimizer = optim.SGD(value_function.parameters(), lr=100)#100
+    control_optimizer_p = optim.SGD(new_control.parameters(), lr=0.5) #50
+    value_optimizer_p = optim.SGD(value_function.parameters(), lr=0.1)#100
 
     lmbda = lambda epoch : 1 if epoch < 500 else 0.99# 0.996
     value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
@@ -327,6 +329,37 @@ if __name__ == '__main__':
     R = torch.tensor([[1]], dtype = torch.float)
 
 
+    #pretraining to get minimal possible convergence result
+    x_pretrain = torch.tensor(np.random.rand(800, 2), dtype=torch.float)
+    v_pretrain = x_pretrain[:,0]*x_pretrain[:,1]#TODO this is wrong!
+    u_pretrain = x_pretrain[:,0]*x_pretrain[:,1]#TODO this is wrong!
+    for epoch in range(1,10,1):
+        #value function
+        print('pretrain epoch: ', epoch)
+        value_optimizer_p.zero_grad()
+
+        old_control.train()
+        value_function.train()
+        new_control.train()
+
+        loss = torch.square(value_function(x_pretrain) - v_pretrain).mean()
+        loss.backward()
+        value_optimizer_p.step()
+        print('value_loss: ',loss)
+
+        #control-function
+        control_optimizer_p.zero_grad()
+        loss = torch.square(value_function(x_pretrain) - u_pretrain).mean()
+
+        loss.backward()
+        control_optimizer_p.step()
+        print('control loss: ',loss)
+        
+        
+
+
+
+    pdb.set_trace()
     #Training and Testing
     for epoch in range(1, 100, 1):
         print("epoch: ", epoch)
@@ -336,6 +369,8 @@ if __name__ == '__main__':
         for j,(x, u) in enumerate(train_loader):
             #-------------Value iteration------------
             traj = torch.squeeze(x, 0)
+            pdb.set_trace()
+            print(x)
             old_controls = old_control(traj).detach().reshape_as(u)
             new_controls= new_control(traj).detach().reshape_as(u)
             diff = torch.squeeze(old_controls - u, 0)
