@@ -311,8 +311,8 @@ if __name__ == '__main__':
     value_function = critic(positive = True, space_dim = 2)
     costs = cost_functional()
 
-    control_optimizer = optim.LBFGS(new_control.parameters(), lr=0.01, max_iter = 30, tolerance_grad=1e-50)
-    value_optimizer = optim.LBFGS(value_function.parameters(), lr=0.01, max_iter = 30, tolerance_grad=1e-50)
+    control_optimizer = optim.LBFGS(new_control.parameters(), lr=0.05, max_iter = 300, tolerance_grad=1e-90)
+    value_optimizer = optim.LBFGS(value_function.parameters(), lr=0.01, max_iter = 300, tolerance_grad=1e-90)
     
     Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
     R = torch.tensor([[1]], dtype = torch.float)

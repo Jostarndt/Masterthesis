@@ -9,11 +9,15 @@ from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset, ConcatDataset
 import torch.nn.functional as F
 
-import timeit
+#import timeit
+import time
 import itertools
 import pdb
 
 
+
+#torch.manual_seet(0)
+#np.random.seed(0)
 
 batchsize = 4096
 
@@ -314,7 +318,7 @@ if __name__ == '__main__':
     value_function = critic(positive = True, space_dim = 2)
     costs = cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=40) #50
+    control_optimizer = optim.SGD(new_control.parameters(), lr=30) #40 was best but unstable?
     value_optimizer = optim.SGD(value_function.parameters(), lr=8)#100
     control_optimizer_p = optim.SGD(new_control.parameters(), lr=0.2) #50
     value_optimizer_p = optim.SGD(value_function.parameters(), lr=0.08)#100
@@ -420,8 +424,9 @@ if __name__ == '__main__':
             print('control-l2: ', control_loss)
             Writer.add_scalars('errors', {'residual': overall_loss,'control_loss_l2': control_loss, 'value_loss_l2': value_loss}, epoch )
             end = time.time()
-            print('elapsed time: ', start-end)
+            print('elapsed time: ', end - start)
             value_scheduler.step()
+
 
 
     old_control.train()
