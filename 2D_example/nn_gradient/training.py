@@ -18,13 +18,11 @@ import pdb
 batchsize = 4096
 
 
-
 class actor(nn.Module):
     def __init__(self,control_dim=1, space_dim=1, stabilizing = False):
         super(actor, self).__init__()
-        self.fc1 = nn.Linear(space_dim, 50*space_dim)
-        self.fc2 = nn.Linear(50*space_dim, 50*space_dim)
-        self.fc3 = nn.Linear(50*space_dim, control_dim)
+        self.fc1 = nn.Linear(space_dim, 4)
+        self.fc3 = nn.Linear(4, control_dim)
         if stabilizing:
             self.fc1.weight = torch.nn.parameter.Parameter(torch.zeros(self.fc1.weight.shape))
             self.fc1.bias = torch.nn.parameter.Parameter(torch.zeros(self.fc1.bias.shape))
@@ -36,15 +34,14 @@ class actor(nn.Module):
             self.fc3.bias = torch.nn.parameter.Parameter(torch.zeros(self.fc3.bias.shape))
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
         return self.fc3(x)
 
 class critic(nn.Module):
     def __init__(self, space_dim=1, positive = False):
         super(critic, self).__init__()
         self.s_dim = space_dim
-        self.fc1 = nn.Linear(space_dim, 30)
-        self.fc2 = nn.Linear(30, 1)
+        self.fc1 = nn.Linear(space_dim, 50)
+        self.fc2 = nn.Linear(50, 1)
         
         if positive:
             pass
@@ -317,10 +314,10 @@ if __name__ == '__main__':
     value_function = critic(positive = True, space_dim = 2)
     costs = cost_functional()
 
-    control_optimizer = optim.SGD(new_control.parameters(), lr=50) #50
-    value_optimizer = optim.SGD(value_function.parameters(), lr=100)#100
-    control_optimizer_p = optim.SGD(new_control.parameters(), lr=0.5) #50
-    value_optimizer_p = optim.SGD(value_function.parameters(), lr=0.1)#100
+    control_optimizer = optim.SGD(new_control.parameters(), lr=40) #50
+    value_optimizer = optim.SGD(value_function.parameters(), lr=8)#100
+    control_optimizer_p = optim.SGD(new_control.parameters(), lr=0.2) #50
+    value_optimizer_p = optim.SGD(value_function.parameters(), lr=0.08)#100
 
     lmbda = lambda epoch : 1 if epoch < 500 else 0.99# 0.996
     value_scheduler = optim.lr_scheduler.MultiplicativeLR(value_optimizer, lr_lambda = lmbda)
@@ -330,10 +327,11 @@ if __name__ == '__main__':
 
 
     #pretraining to get minimal possible convergence result
-    x_pretrain = torch.tensor(np.random.rand(800, 2), dtype=torch.float)
-    v_pretrain = x_pretrain[:,0]*x_pretrain[:,1]#TODO this is wrong!
-    u_pretrain = x_pretrain[:,0]*x_pretrain[:,1]#TODO this is wrong!
-    for epoch in range(1,10,1):
+    x_pretrain = 0.1* torch.tensor(np.random.rand(800, 2), dtype=torch.float)
+    zeros = torch.zeros((800, 2), dtype=torch.float)
+    v_pretrain = 0.5*x_pretrain[:,0]*x_pretrain[:,0] + x_pretrain[:,1]*x_pretrain[:,0]
+    u_pretrain =- x_pretrain[:,0]*x_pretrain[:,1]#TODO this is wrong!
+    for epoch in range(1,1,1):
         #value function
         print('pretrain epoch: ', epoch)
         value_optimizer_p.zero_grad()
@@ -342,26 +340,28 @@ if __name__ == '__main__':
         value_function.train()
         new_control.train()
 
-        loss = torch.square(value_function(x_pretrain) - v_pretrain).mean()
-        loss.backward()
+        value_loss = torch.square(value_function(x_pretrain) - v_pretrain).mean()
+        value_loss.backward()
         value_optimizer_p.step()
-        print('value_loss: ',loss)
+        print('value_loss: ',value_loss)
+        #print('wrong_value_loss: ',torch.square((value_function(x_pretrain)-value_function(zeros).detach()) - v_pretrain).mean())
 
         #control-function
         control_optimizer_p.zero_grad()
-        loss = torch.square(value_function(x_pretrain) - u_pretrain).mean()
+        loss = torch.square(new_control(x_pretrain) - u_pretrain).mean()
 
         loss.backward()
         control_optimizer_p.step()
         print('control loss: ',loss)
+    
+    old_control = deepcopy(new_control)
         
-        
 
 
 
-    pdb.set_trace()
     #Training and Testing
-    for epoch in range(1, 100, 1):
+    start = time.time()
+    for epoch in range(1, 50, 1):
         print("epoch: ", epoch)
         old_control.train()
         value_function.train()
@@ -369,8 +369,6 @@ if __name__ == '__main__':
         for j,(x, u) in enumerate(train_loader):
             #-------------Value iteration------------
             traj = torch.squeeze(x, 0)
-            pdb.set_trace()
-            print(x)
             old_controls = old_control(traj).detach().reshape_as(u)
             new_controls= new_control(traj).detach().reshape_as(u)
             diff = torch.squeeze(old_controls - u, 0)
@@ -385,22 +383,16 @@ if __name__ == '__main__':
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 
-                    
-                #if on_optimum == True:
-                #    overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]))) - 0.5*torch.square(trajectory[:,0,0,0])- torch.square(trajectory[:,0,0,1]) #TODO make sure this is correct
                 overall_loss =  torch.squeeze(torch.squeeze(value_function(x[:,0]))) - torch.squeeze(torch.squeeze(value_function(x[:,-1]).detach())) + torch.squeeze(control_loss)
-
                 overall_loss = torch.square(overall_loss).mean()# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
         
-                #check for abbruchkriterium
+                #check for stopping criteria
                 if overall_loss < 10^(-13):
                     print('max reached')
                     break
-                #print(overall_loss)
                 overall_loss.backward()
                 value_optimizer.step()
-                
-            print(overall_loss)
+            print('value loss', overall_loss)
 
             #--------policy improvement------------
             overall_loss_init =(value_function(x[:,0]).detach() - value_function(x[:,-1]).detach())
@@ -409,41 +401,54 @@ if __name__ == '__main__':
                 value_optimizer.zero_grad()
         
                 new_controls= new_control(traj).reshape_as(u)
-
                 points_b = torch.matmul(new_controls, torch.matmul(R, diff.transpose(-1,-2)))
                 points_together = 2*points_b - points_a
                 control_loss =0.2* torch.mean(points_together, dim=-3)
-                #pdb.set_trace()
                 overall_loss =overall_loss_init.reshape_as(control_loss) + control_loss
-        
-        
-                overall_loss = torch.square(overall_loss).mean()#TODO: square instead?
-
+                overall_loss = torch.square(overall_loss).mean()
                 # abbruchkriteriumassert policy_error !=  0
                 if overall_loss < 10^(-13):
                     print('max reached')
                     break
                 overall_loss.backward()
                 control_optimizer.step()
-            print(overall_loss)
+
+            print('control-residual', overall_loss)
+            value_loss= torch.square((value_function(x_pretrain)-value_function(zeros).detach()) - v_pretrain).mean()
+            print('value-l2: ', value_loss)
+            control_loss = torch.square(new_control(x_pretrain)  - u_pretrain).mean()
+            print('control-l2: ', control_loss)
+            Writer.add_scalars('errors', {'residual': overall_loss,'control_loss_l2': control_loss, 'value_loss_l2': value_loss}, epoch )
+            end = time.time()
+            print('elapsed time: ', start-end)
+            value_scheduler.step()
 
 
-        '''TESTING'''
-        old_control.eval()
-        value_function.eval()
-        new_control.eval()
-        for j, (x, u) in enumerate(test_loader):
-            value_error= error.value_iteration_left(x, u, old_control, new_control, value_function, on_optimum = True)
-            
-            policy_error = error.policy_improvement(x, u, old_control, new_control, value_function, op_factor = 1, noise_factor=0)
-            Writer.add_scalars('errors', {'test policy error': policy_error,'test value_error':value_error},(j + len(test_loader)*epoch)*dataset_stretch_factor )
- 
-        value_scheduler.step()
-    
-    #Presenting results
-    present_results(value_function, new_control)
-    print('parameters of value function', value_function.parameters())
-    for name, param in value_function.named_parameters():
-        print(name, param.data)
+    old_control.train()
+    value_function.train()
+    new_control.train()
+    for epoch in range(1,10,1):
+        #value function
+        print('pretrain epoch: ', epoch)
+        value_optimizer_p.zero_grad()
         
+        value_loss = torch.square(value_function(x_pretrain) - v_pretrain).mean()
+        value_loss.backward()
+        value_optimizer_p.step()
+        print('optimal_value_loss: ',value_loss)
+        print('wrong_value_loss: ',torch.square((value_function(x_pretrain)-value_function(zeros).detach()) - v_pretrain).mean())
+
+        #control-function
+        control_optimizer_p.zero_grad()
+        control_loss = torch.square(new_control(x_pretrain)  - u_pretrain).mean()
+        control_loss.backward()
+        control_optimizer_p.step()
+        print('control loss: ', control_loss)
+ 
+
+
+
+
+
+    
     print('done')
