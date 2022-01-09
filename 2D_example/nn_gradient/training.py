@@ -75,9 +75,9 @@ class critic(nn.Module):
 
 class Dataset():
     def __init__(self):
-        self.support_points =20  #amount of euler steps / steps in the integral
-        self.amount_x = 2 #amount of points of x on which V is getting trained. Note: trajectory has actual lengh of amount_x * support_points
-        self.stepsize = 0.01 #stepsize for the euler steps, stepsize = distance of x from above / support points => distance of 0.3 
+        self.support_points =5#20  #amount of euler steps / steps in the integral
+        self.amount_x = 1 #amount of points of x on which V is getting trained. Note: trajectory has actual lengh of amount_x * support_points
+        self.stepsize = 0.02#0.01 #stepsize for the euler steps, stepsize = distance of x from above / support points => distance of 0.3 
         #NOTE!! if you change this you have to change 'approx_costs' in train.py TWO TIMES!
         self.dataset = []
         self.datasets = []
@@ -104,7 +104,7 @@ class Dataset():
         return dataset
 
     def create_dataset_different_control_and_starts(self, amount_startpoints):
-        controls = [[-i/10,-j/10] for i,j in zip(range(1, 5), range(1, 5))]
+        controls = [[-i/10,-j/10] for i,j in zip(range(1, 2), range(1, 2))]
         #controls = [[-i/10,-j/10] for i,j in itertools.product(range(1, 5), range(1, 5))]
         #print(controls)
         controls = torch.unsqueeze(torch.tensor(controls, dtype= torch.float), 1)#TODO this in unncescessary - the controls & staring points are vectors anyways?
@@ -186,7 +186,7 @@ class error():
         points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(-1,-2)))
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
         points_together = 2*points_b - points_a
-        control_loss =0.2* torch.mean(points_together, dim=-3)
+        control_loss =0.1* torch.mean(points_together, dim=-3)
         
         if on_optimum == True:
             overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]))) - 0.5*torch.square(trajectory[:,0,0,0])- torch.square(trajectory[:,0,0,1]) #TODO make sure this is correct
@@ -211,7 +211,7 @@ class error():
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff))
         points_together = 2*points_b - points_a
 
-        control_loss =0.2* torch.mean(points_together, dim=-3)
+        control_loss =0.1* torch.mean(points_together, dim=-3)
         
         if on_optimum == True:
             overall_loss =  torch.squeeze(torch.squeeze(value_function(trajectory[:,0]))) - 0.5*torch.square(trajectory[:,0,0,0])- torch.square(trajectory[:,0,0,1]) #TODO make sure this is correct
@@ -234,7 +234,7 @@ class error():
         points_a = torch.matmul(traj, torch.matmul(self.Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(self.R, oc.transpose(-1,-2)))
         points_b = torch.matmul(new_controls, torch.matmul(self.R, diff.transpose(-1,-2)))
         points_together = 2*points_b - points_a
-        control_loss =0.2* torch.mean(points_together, dim=-3)
+        control_loss =0.1* torch.mean(points_together, dim=-3)
         overall_loss = (1-op_factor)*(value_function(trajectory[:,0]).detach() - value_function(trajectory[:,-1]).detach()).reshape_as(control_loss) + (op_factor)*(0.5* trajectory[:,0,0,0]**2 + trajectory[:,0,0,1]**2 - 0.5* trajectory[:,-1,0,0]**2 - trajectory[:,-1,0,1]**2).reshape_as(control_loss)  + control_loss
         
         
@@ -247,7 +247,7 @@ class error():
         traj = torch.squeeze(trajectory, 0)
         
         new_control.zero_grad()
-        overall_loss = 0.2*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
+        overall_loss = 0.1*torch.mean(torch.abs(new_control(traj) + torch.unsqueeze(traj[:,:,0]*traj[:,:,1],1)))
         return overall_loss
 
 def optimal_value_function(traj):
@@ -302,7 +302,7 @@ if __name__ == '__main__':
     Writer = SummaryWriter()
     error = error()
     dataset = Dataset()
-    trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=100)
+    trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=1) #100
     train_loader = DataLoader(dataset = trainset, batch_size = batchsize, shuffle =True)
 
     
@@ -381,9 +381,9 @@ if __name__ == '__main__':
             points_a = torch.matmul(traj, torch.matmul(Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(R, oc.transpose(-1,-2)))
             points_b = torch.matmul(new_controls, torch.matmul(R, diff))
             points_together = 2*points_b - points_a
-            control_loss =0.2* torch.mean(points_together, dim=-3)
+            control_loss =0.1* torch.mean(points_together, dim=-3)
 
-            for i in range(500):
+            for i in range(1000):
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
                 
@@ -391,28 +391,30 @@ if __name__ == '__main__':
                 overall_loss = torch.square(overall_loss).mean()# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
         
                 #check for stopping criteria
-                if overall_loss < 10^(-13):
-                    print('max reached')
+                if overall_loss < 10**(-12):
+                    print('max value iteration reached after ',  i, ' steps!')
                     break
                 overall_loss.backward()
                 value_optimizer.step()
             print('value loss', overall_loss)
 
+            end = time.time()
+            print('elapsed time: ', end - start)
             #--------policy improvement------------
             overall_loss_init =(value_function(x[:,0]).detach() - value_function(x[:,-1]).detach())
-            for i in range(500):
+            for i in range(1000):
                 control_optimizer.zero_grad()
                 value_optimizer.zero_grad()
         
                 new_controls= new_control(traj).reshape_as(u)
                 points_b = torch.matmul(new_controls, torch.matmul(R, diff.transpose(-1,-2)))
                 points_together = 2*points_b - points_a
-                control_loss =0.2* torch.mean(points_together, dim=-3)
+                control_loss =0.1* torch.mean(points_together, dim=-3)
                 overall_loss =overall_loss_init.reshape_as(control_loss) + control_loss
                 overall_loss = torch.square(overall_loss).mean()
                 # abbruchkriteriumassert policy_error !=  0
-                if overall_loss < 10^(-13):
-                    print('max reached')
+                if overall_loss < 10**(-12):
+                    print('max policy improvement reached after ',  i, ' steps!')
                     break
                 overall_loss.backward()
                 control_optimizer.step()
@@ -432,7 +434,7 @@ if __name__ == '__main__':
     old_control.train()
     value_function.train()
     new_control.train()
-    for epoch in range(1,10,1):
+    for epoch in range(1,1,1):#10
         #value function
         print('pretrain epoch: ', epoch)
         value_optimizer_p.zero_grad()

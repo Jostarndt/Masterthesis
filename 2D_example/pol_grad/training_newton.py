@@ -8,6 +8,7 @@ import itertools
 import pdb
 import time
 from torch.utils.data import TensorDataset, ConcatDataset
+import matplotlib.pyplot as plt
 
 
 
@@ -142,7 +143,7 @@ class error():
             
             #pdb.set_trace()
             #if torch.abs(grad_step).sum() < 0.0000001:
-            if torch.max(torch.abs(grad_step)) < 0.00000001:#TODO difference to 10^(-8)
+            if torch.max(torch.abs(grad_step)) < 0.00000001:#TODO difference to 10^(-8) is because 10 ** (-8) is the correct syntax
                 #print(torch.abs(grad_step).sum(), 'grad step small enough')
                 print(grad_step, 'grad step small enough. Steps it took: ', i)
                 #print(grad_step)
@@ -181,6 +182,8 @@ if __name__ == '__main__':
     #theta_u =torch.tensor([0, 0,0,0, -1.1], dtype = torch.float)
     #theta_v =torch.tensor([0.5, 1, 0], dtype = torch.float)
 
+    theta_u_plot = theta_u
+    theta_v_plot = theta_v
 
     #Training and Testing
     start = time.time()
@@ -191,6 +194,12 @@ if __name__ == '__main__':
             #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
             #theta_v =torch.tensor([2.5, 5, 0], dtype = torch.float)
             residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v)
+        theta_u_plot = np.vstack((theta_u_plot, theta_u))
+        theta_v_plot = np.vstack((theta_v_plot, theta_v))
         print(residual, theta_v, theta_u)
         end = time.time()
         print('elapsed time: ', end-start)
+    plt.plot(theta_u_plot)
+    plt.show()
+    plt.plot(theta_v_plot)
+    plt.show()

@@ -8,7 +8,7 @@ import itertools
 import pdb
 import time
 from torch.utils.data import TensorDataset, ConcatDataset
-
+import matplotlib.pyplot as plt
 
 
 batchsize = 4096 #512#4096
@@ -112,6 +112,7 @@ class error():
         self.R = torch.tensor([[1]], dtype = torch.float)
 
     def both_iterations_direct_solution(self,trajectory, control, old_control, value_function, theta_u, theta_v, epoch):
+        epoch = epoch / 10000
         control_monomials = old_control(trajectory)
         rho_q = torch.mul(torch.matmul(trajectory, torch.matmul(self.Q, trajectory.transpose(-1,-2))).mean((1,2,3)), 0.2) #MEAN
 
@@ -138,7 +139,7 @@ class error():
                     stepsize_u = 400
                     #if epoch >= 70:
                         #stepsize_u = 450
-        for i in range(10000):
+        for i in range(1):#10000
             grad_step = torch.matmul( torch.matmul(z.transpose(0,1),  z), torch.cat((theta_v, theta_u))) - torch.matmul(z.transpose(0,1), pi) #TODO: sure that pi is correct?
 
             grad_step_v, grad_step_u = torch.split(grad_step, [3,5], dim = 0)
@@ -155,10 +156,11 @@ class error():
             
             #pdb.set_trace()
             #if torch.abs(grad_step).sum() < 0.0000001:
-            if torch.max(torch.abs(grad_step)) < 1* 10^(-6):
-                print(torch.abs(grad_step).sum(), 'grad step small enough')
-                #if residual > 0.01:
-                    #schrittweise kleiner machen
+            if torch.max(torch.abs(grad_step)) <  10**(-6-0.1*epoch):
+                pass
+                #print(torch.abs(grad_step).sum(), 'grad step small er than ->>>',10**(-6-0.2*epoch) )
+                #break
+        #print('grad step has size: ::::: ', torch.max(torch.abs(grad_step)))
 
         theta = torch.cat((theta_v, theta_u))
 
@@ -192,17 +194,31 @@ if __name__ == '__main__':
     #theta_u =torch.tensor([0, 0,0,0, -1.1], dtype = torch.float)
     #theta_v =torch.tensor([0.5, 1, 0], dtype = torch.float)
 
-
+    theta_u_plot = theta_u
+    theta_v_plot = theta_v
     #Training and Testing
     start = time.time()
-    for epoch in range(1,200, 1):
-        print("epoch: ", epoch)
-        print('residual, theta_v, theta_u')
+    for epoch in range(1,1000000, 1):
         for j,(x, u) in enumerate(train_loader):
             #theta_u =torch.tensor([0, 0,0,0, -1], dtype = torch.float)
             #theta_v =torch.tensor([2.5, 5, 0], dtype = torch.float)
             residual, theta_v, theta_u = error.both_iterations_direct_solution(trajectory= x, control=u, old_control = control_function, value_function = value_function , theta_u= theta_u, theta_v= theta_v, epoch = epoch)
-        print(residual, theta_v, theta_u)
-        print('differences: v, u: , ', torch.abs(theta_v - torch.tensor([0.5, 1 ,0], dtype = torch.float)).mean(), torch.abs(theta_u - torch.tensor([0, 0 ,0,0,-1], dtype = torch.float)).mean())
-        end = time.time()
-        print('elapsed total time: ', end-start)
+
+
+        if epoch %10000 == 0:
+            theta_u_plot = np.vstack((theta_u_plot, theta_u))
+            theta_v_plot = np.vstack((theta_v_plot, theta_v))
+            print("epoch: ", epoch)
+            print('residual, theta_v, theta_u')
+            print(residual, theta_v, theta_u)
+            print('differences: v, u: , ', torch.abs(theta_v - torch.tensor([0.5, 1 ,0], dtype = torch.float)).mean(), torch.abs(theta_u - torch.tensor([0, 0 ,0,0,-1], dtype = torch.float)).mean())
+            end = time.time()
+            print('elapsed total time: ', end-start)
+
+
+
+
+    plt.plot(theta_u_plot)
+    plt.show()
+    plt.plot(theta_v_plot)
+    plt.show()

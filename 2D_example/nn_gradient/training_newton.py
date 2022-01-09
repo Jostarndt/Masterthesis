@@ -9,10 +9,11 @@ from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset, ConcatDataset
 import torch.nn.functional as F
 
+import time
 import timeit
 import itertools
 import pdb
-
+import matplotlib.pyplot as plt
 
 
 batchsize = 4096
@@ -298,80 +299,90 @@ def present_results(value_function, new_control, stepname= "after_training"):
 
 
 if __name__ == '__main__':
-    Writer = SummaryWriter()
+    start = time.time()
     error = error()
-    dataset = Dataset()
-    trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=100)
-    train_loader = DataLoader(dataset = trainset, batch_size = batchsize, shuffle =True)
+    Writer = SummaryWriter()
+    for experiment in range(10):
+        dataset = Dataset()
+        trainset = dataset.create_dataset_different_control_and_starts(amount_startpoints=100)
+        train_loader = DataLoader(dataset = trainset, batch_size = batchsize, shuffle =True)
 
-    
-    print("##################################")
-    old_control = actor(stabilizing = False, control_dim = 1, space_dim = 2)
-    new_control = actor(stabilizing = False, control_dim = 1, space_dim = 2)
-    value_function = critic(positive = True, space_dim = 2)
-    costs = cost_functional()
-
-    control_optimizer = optim.LBFGS(new_control.parameters(), lr=0.05, max_iter = 300, tolerance_grad=1e-90)
-    value_optimizer = optim.LBFGS(value_function.parameters(), lr=0.01, max_iter = 300, tolerance_grad=1e-90)
-    
-    Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
-    R = torch.tensor([[1]], dtype = torch.float)
-
-
-    #Training and Testing
-    for epoch in range(1, 20, 1):
-        print("epoch: ", epoch)
-        old_control.train()
-        value_function.train()
-        new_control.train()
-        for j,(x, u) in enumerate(train_loader):
-            #-------------Value iteration------------
-            traj = torch.squeeze(x, 0)
-            old_controls = old_control(traj).detach().reshape_as(u)
-            new_controls= new_control(traj).detach().reshape_as(u)
-            diff = torch.squeeze(old_controls - u, 0)
-            oc = torch.squeeze(u, 0)
-
-            points_a = torch.matmul(traj, torch.matmul(Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(R, oc.transpose(-1,-2)))
-            points_b = torch.matmul(new_controls, torch.matmul(R, diff))
-            points_together = 2*points_b - points_a
-            control_loss =0.2* torch.mean(points_together, dim=-3)
-
-            def closure():
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
-                overall_loss =  torch.squeeze(torch.squeeze(value_function(x[:,0]))) - torch.squeeze(torch.squeeze(value_function(x[:,-1]).detach())) + torch.squeeze(control_loss)
-
-                overall_loss = torch.square(overall_loss).mean()# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
-                overall_loss.backward()
-                return overall_loss
-            value_optimizer.step(closure)
-                
-            print(torch.square(torch.squeeze(torch.squeeze(value_function(x[:,0]))) - torch.squeeze(torch.squeeze(value_function(x[:,-1]).detach())) + torch.squeeze(control_loss)).mean())
-
-            #--------policy improvement------------
-            overall_loss_init =(value_function(x[:,0]).detach() - value_function(x[:,-1]).detach())
-            def closure():
-                control_optimizer.zero_grad()
-                value_optimizer.zero_grad()
         
-                new_controls= new_control(traj).reshape_as(u)
+        print("##################################")
+        old_control = actor(stabilizing = False, control_dim = 1, space_dim = 2)
+        new_control = actor(stabilizing = False, control_dim = 1, space_dim = 2)
+        value_function = critic(positive = True, space_dim = 2)
+        costs = cost_functional()
 
+        control_optimizer = optim.LBFGS(new_control.parameters(), lr=0.005,history_size=2400, max_iter = 30, tolerance_change=1e-15)
+        value_optimizer = optim.LBFGS(value_function.parameters(), lr=0.001,history_size = 2400, max_iter = 200, tolerance_change=1e-15)
+        
+        Q = torch.tensor([[1, 0], [0, 1]],dtype=torch.float)
+        R = torch.tensor([[1]], dtype = torch.float)
+
+
+        #Training and Testing
+        plt_loss = 0
+        for epoch in range(1, 20, 1):
+            print("epoch: ", epoch)
+            old_control.train()
+            value_function.train()
+            new_control.train()
+            for j,(x, u) in enumerate(train_loader):
+                #-------------Value iteration------------
+                traj = torch.squeeze(x, 0)
+                old_controls = old_control(traj).detach().reshape_as(u)
+                new_controls= new_control(traj).detach().reshape_as(u)
+                diff = torch.squeeze(old_controls - u, 0)
+                oc = torch.squeeze(u, 0)
+
+                points_a = torch.matmul(traj, torch.matmul(Q, traj.transpose(-1,-2))) + torch.matmul(oc, torch.matmul(R, oc.transpose(-1,-2)))
+                points_b = torch.matmul(new_controls, torch.matmul(R, diff))
+                points_together = 2*points_b - points_a
+                control_loss =0.2* torch.mean(points_together, dim=-3)
+
+                def closure():
+                    control_optimizer.zero_grad()
+                    value_optimizer.zero_grad()
+                    overall_loss =  torch.squeeze(torch.squeeze(value_function(x[:,0]))) - torch.squeeze(torch.squeeze(value_function(x[:,-1]).detach())) + torch.squeeze(control_loss)
+
+                    overall_loss = torch.square(overall_loss).mean()# + torch.square(value_function(torch.tensor([[0,0]], dtype = torch.float)))
+                    overall_loss.backward()
+                    return overall_loss
+                value_optimizer.step(closure)
+                overall_loss = torch.square(torch.squeeze(torch.squeeze(value_function(x[:,0]))) - torch.squeeze(torch.squeeze(value_function(x[:,-1]).detach())) + torch.squeeze(control_loss)).mean()
+                print('l2 res after value update', overall_loss )
+                plt_loss = np.vstack((plt_loss,overall_loss.detach()))
+
+                #--------policy improvement------------
+                overall_loss_init =(value_function(x[:,0]).detach() - value_function(x[:,-1]).detach())
+                def closure():
+                    control_optimizer.zero_grad()
+                    value_optimizer.zero_grad()
+            
+                    new_controls= new_control(traj).reshape_as(u)
+
+                    points_b = torch.matmul(new_controls, torch.matmul(R, diff.transpose(-1,-2)))#this matmul can be outsourced
+                    points_together = 2*points_b - points_a
+                    control_loss =0.2* torch.mean(points_together, dim=-3)
+                    overall_loss =overall_loss_init.reshape_as(control_loss) + control_loss
+                    overall_loss = torch.square(overall_loss).mean()
+                    overall_loss.backward()
+                    return overall_loss
+                control_optimizer.step(closure)
+
+                new_controls= new_control(traj).reshape_as(u)
                 points_b = torch.matmul(new_controls, torch.matmul(R, diff.transpose(-1,-2)))#this matmul can be outsourced
                 points_together = 2*points_b - points_a
                 control_loss =0.2* torch.mean(points_together, dim=-3)
                 overall_loss =overall_loss_init.reshape_as(control_loss) + control_loss
                 overall_loss = torch.square(overall_loss).mean()
-                overall_loss.backward()
-                return overall_loss
-            control_optimizer.step(closure)
-
-            new_controls= new_control(traj).reshape_as(u)
-            points_b = torch.matmul(new_controls, torch.matmul(R, diff.transpose(-1,-2)))#this matmul can be outsourced
-            points_together = 2*points_b - points_a
-            control_loss =0.2* torch.mean(points_together, dim=-3)
-            overall_loss =overall_loss_init.reshape_as(control_loss) + control_loss
-            overall_loss = torch.square(overall_loss).mean()
-            print(overall_loss)
-
+                print('l2 res after control update', overall_loss)
+                plt_loss = np.vstack((plt_loss,overall_loss.detach()))
+        plt.plot(plt_loss, label = 'residual'+str(experiment))
+        np.savetxt(str(experiment), plt_loss)
+    
+    end = time.time()
+    print('10 runs took ', end - start, ' seconds')
+    plt.show()
     print('done')
